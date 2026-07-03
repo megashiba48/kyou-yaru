@@ -46,15 +46,31 @@
     <!-- 今日タブ -->
     <section id="tab-today" class="tab">
       <h2 id="today-date"></h2>
-      <div id="pick3-area">
-        <p class="section-label">今日の候補3つ — どれからやる?</p>
-        <div id="pick3"></div>
+
+      <!-- ポモドーロ(常設) -->
+      <div id="pomodoro" class="work">
+        <div class="pomo-top">
+          <span id="pomo-phase">作業</span>
+          <span id="pomo-count" class="muted"></span>
+        </div>
+        <div id="pomo-time">25:00</div>
+        <div id="pomo-task" class="muted">紐付けなし</div>
+        <div class="row pomo-btns">
+          <button id="pomo-toggle" class="primary">開始</button>
+          <button id="pomo-skip">スキップ</button>
+          <button id="pomo-sound" class="ghost">🔔</button>
+        </div>
       </div>
-      <div id="focus-area" class="hidden">
-        <p class="section-label">いまやる</p>
-        <div id="focus-card"></div>
-      </div>
-      <p class="section-label">今日の残り</p>
+
+      <p class="section-label">今日のTOP3(最重要は3つまで)</p>
+      <div id="top3"></div>
+
+      <p class="section-label">今すぐやる1個</p>
+      <div id="now-one"></div>
+
+      <div id="blank-block"></div>
+
+      <p class="section-label">その他</p>
       <ul id="today-rest" class="list"></ul>
       <p id="today-empty" class="muted hidden">全部終わってます。おつかれさま 🎉</p>
     </section>
@@ -131,7 +147,7 @@
       </form>
       <div id="bucket-chips" class="chips"></div>
       <ul id="bucket-list" class="list"></ul>
-      <p class="muted">app v4.4</p>
+      <p class="muted">app v4.5</p>
     </section>
   </main>
 

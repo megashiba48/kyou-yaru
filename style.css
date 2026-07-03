@@ -40,26 +40,53 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .row input[type="number"] { width: 90px; }
 
-/* 候補3カード */
-#pick3 { display: flex; flex-direction: column; gap: 10px; }
-.pick-card { background: var(--card); border-radius: var(--radius); padding: 14px 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,.05); display: flex; align-items: center; gap: 12px;
-  border: 2px solid transparent; }
-.pick-card:active { border-color: var(--indigo); }
-.pick-card .name { font-weight: 700; flex: 1; }
-.pick-card .meta { color: var(--muted); font-size: .8rem; white-space: nowrap; }
-.pick-card .warn { color: var(--danger); font-size: .75rem; }
+/* ポモドーロ */
+#pomodoro { border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; color: #fff;
+  box-shadow: 0 4px 14px rgba(0,0,0,.12); text-align: center; }
+#pomodoro.work { background: var(--indigo); }
+#pomodoro.break { background: #0e9f6e; }
+.pomo-top { display: flex; justify-content: space-between; font-size: .8rem; opacity: .9; }
+#pomo-count { color: rgba(255,255,255,.85); }
+#pomo-time { font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+#pomo-task { font-size: .8rem; opacity: .85; margin-bottom: 10px; }
+.pomo-btns { justify-content: center; }
+.pomo-btns button { min-width: 90px; }
+#pomo-toggle { background: #fff; color: var(--indigo); font-weight: 700; }
+#pomo-skip { background: rgba(255,255,255,.2); color: #fff; }
+#pomo-sound { background: rgba(255,255,255,.2); color: #fff; min-width: 44px; }
 
-/* フォーカスカード */
-#focus-card { background: var(--indigo); color: #fff; border-radius: var(--radius);
-  padding: 20px 18px; box-shadow: 0 6px 20px rgba(79,70,229,.35); }
-#focus-card .name { font-size: 1.3rem; font-weight: 800; margin-bottom: 4px; }
-#focus-card .meta { opacity: .8; font-size: .85rem; margin-bottom: 14px; }
-#focus-card .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-#focus-card .actions button { flex: 1; padding: 12px 8px; font-weight: 700; border-radius: 10px; }
-#focus-card .done-btn { background: #fff; color: var(--indigo); }
-#focus-card .later-btn { background: rgba(255,255,255,.22); color: #fff; }
-#focus-card .skip-btn { background: rgba(0,0,0,.18); color: #fff; }
+/* TOP3 */
+#top3 { display: flex; flex-direction: column; gap: 8px; }
+.top3-slot { background: var(--card); border-radius: var(--radius); padding: 12px 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.05); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.top3-slot.empty { background: transparent; box-shadow: none; padding: 2px; }
+.top3-slot .t3-name { font-weight: 700; flex: 1; }
+.top3-slot .warn { color: var(--danger); font-weight: 600; }
+.t3-btns { display: flex; gap: 6px; }
+.t3-btns button { padding: 6px 10px; font-size: .8rem; }
+.add-b { width: 100%; text-align: left; padding: 10px 12px; border: 1px dashed #c8ccda; border-radius: 12px; }
+.t3-picker { background: var(--card); border-radius: 12px; padding: 10px 12px; margin-top: 6px;
+  display: flex; flex-direction: column; gap: 6px; }
+.t3-picker button[data-id] { text-align: left; background: #f0f1f7; font-size: .85rem; }
+.t3-picker button[data-id]:active { background: var(--indigo); color: #fff; }
+
+/* 今すぐ1個 */
+.now-card { background: var(--indigo); color: #fff; border-radius: var(--radius);
+  padding: 18px; box-shadow: 0 6px 20px rgba(79,70,229,.35); }
+.now-card .now-name { font-size: 1.3rem; font-weight: 800; margin-bottom: 2px; }
+.now-card .now-meta { opacity: .8; font-size: .85rem; margin-bottom: 12px; }
+.now-actions button { flex: 1; padding: 12px 8px; font-weight: 700; }
+.now-card .done-btn { background: #fff; color: var(--indigo); }
+.now-card .later-btn { background: rgba(255,255,255,.22); color: #fff; }
+.now-repick { align-items: center; margin-top: 10px; font-size: .8rem; }
+.now-repick .muted { color: rgba(255,255,255,.8); }
+.now-repick button { background: rgba(255,255,255,.2); color: #fff; padding: 6px 10px; font-size: .8rem; }
+
+/* 余白ブロック */
+#blank-block { margin: 12px 0; }
+.blank-card { background: #eef0fb; border-radius: 12px; padding: 12px 14px; font-size: .9rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.blank-card .edit-b { padding: 6px 10px; font-size: .8rem; }
 
 /* リスト */
 .list { list-style: none; margin: 0; padding: 0; }

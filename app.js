@@ -123,34 +123,44 @@ function score(item) {
   return s;
 }
 
-// 今日の実行候補リスト(タスク+今日のルーティン)を作る
-function buildTodayItems() {
+// 今日の実行候補(タスク+今日のルーティン)。top3フラグ付きでスコア順に返す
+function todayPool() {
   const skips = getSkips();
   const laters = getLaters();
   const dow = new Date().getDay();
+  const t3 = getTop3();
   const items = [];
   for (const t of state.tasks) {
     items.push({ kind: "task", id: t.id, name: t.name, minutes: t.minutes,
-      deadline: t.deadline, priority: t.priority, postpone_count: t.postpone_count });
+      deadline: t.deadline, priority: t.priority, postpone_count: t.postpone_count,
+      top3: t3.includes(t.id) });
   }
   for (const r of state.routines) {
     if (!r.days.includes(dow)) continue;
     if (state.logs.some((l) => l.routine_id === r.id)) continue; // 今日済み/スキップ済み
     items.push({ kind: "routine", id: r.id, name: r.name, minutes: r.minutes,
-      deadline: null, priority: 2, postpone_count: 0 });
+      deadline: null, priority: 2, postpone_count: 0, top3: false });
   }
   const visible = items.filter((i) => !skips.includes(i.id));
   visible.sort((a, b) => {
     const la = laters.includes(a.id) ? 1 : 0;
     const lb = laters.includes(b.id) ? 1 : 0;
-    if (la !== lb) return la - lb;               // 「あとで」した物は後ろへ
+    if (la !== lb) return la - lb;
     return score(b) - score(a) || (a.minutes || 99) - (b.minutes || 99);
   });
   return visible;
 }
 
-// ---------- 今日タブ描画 ----------
-let focused = null; // 選択中の1件
+// TOP3(端末内保存・その日限り)
+const top3Key = () => `top3:${todayStr()}`;
+const getTop3 = () => JSON.parse(localStorage.getItem(top3Key()) || "[]");
+const setTop3 = (ids) => localStorage.setItem(top3Key(), JSON.stringify(ids.slice(0, 3)));
+function toggleTop3(id) {
+  let ids = getTop3();
+  if (ids.includes(id)) ids = ids.filter((x) => x !== id);
+  else { if (ids.length >= 3) return; ids.push(id); }
+  setTop3(ids);
+}
 
 function metaText(i) {
   const parts = [];
@@ -160,76 +170,224 @@ function metaText(i) {
   return parts.join("・") || "　";
 }
 
+// 今すぐ1個
+let nowOneId = null;
+let nowOneMode = "priority";
+function pickNowOne(pool) {
+  const t3 = pool.filter((i) => i.top3);
+  const cands = t3.length ? t3 : pool;
+  if (!cands.length) { nowOneId = null; return; }
+  nowOneId = nowOneMode === "random"
+    ? cands[Math.floor(Math.random() * cands.length)].id
+    : cands[0].id;
+}
+
+const byId = (pool, id) => pool.find((i) => i.id === id);
+
+async function completeItem(i) {
+  if (i.kind === "task") {
+    await sb.from("tasks").update({ status: "done", done_at: new Date().toISOString() }).eq("id", i.id);
+    setTop3(getTop3().filter((x) => x !== i.id));
+  } else {
+    await sb.from("routine_log").insert({ routine_id: i.id, on_date: todayStr(), result: "done" });
+  }
+  if (nowOneId === i.id) nowOneId = null;
+  await refresh();
+}
+
 function renderToday() {
   const d = new Date();
   $("#today-date").textContent = `${d.getMonth() + 1}/${d.getDate()}(${WEEKDAYS[d.getDay()]})`;
-  const items = buildTodayItems();
+  const pool = todayPool();
+  $("#today-empty").classList.toggle("hidden", pool.length > 0);
 
-  $("#today-empty").classList.toggle("hidden", items.length > 0);
-  $("#pick3-area").classList.toggle("hidden", !!focused || items.length === 0);
-  $("#focus-area").classList.toggle("hidden", !focused);
+  renderTop3(pool);
+  if (!nowOneId || !pool.some((i) => i.id === nowOneId)) pickNowOne(pool);
+  renderNowOne(pool);
+  renderBlank();
+  renderRest(pool);
+  updatePomoTask(pool);
+}
 
-  // 候補3枚
-  const pick3 = $("#pick3");
-  pick3.innerHTML = "";
-  for (const i of items.slice(0, 3)) {
-    const card = document.createElement("div");
-    card.className = "pick-card";
-    card.innerHTML = `<div class="name">${esc(i.name)}${i.postpone_count >= 3 ? '<div class="warn">3回見送り中 — やめる?分割する?</div>' : ""}</div>
-      <div class="meta">${metaText(i)}</div>`;
-    card.addEventListener("click", () => { focused = i; renderToday(); });
-    pick3.appendChild(card);
+function renderTop3(pool) {
+  const box = $("#top3");
+  box.innerHTML = "";
+  const t3 = getTop3().map((id) => byId(pool, id)).filter(Boolean);
+  for (let s = 0; s < 3; s++) {
+    const i = t3[s];
+    const slot = document.createElement("div");
+    slot.className = "top3-slot" + (i ? "" : " empty");
+    if (i) {
+      slot.innerHTML = `<div class="t3-name">${s + 1}. ${esc(i.name)}${i.postpone_count >= 3 ? '<span class="warn"> ・3回見送り</span>' : ""}</div>
+        <div class="t3-btns"><button class="done-b primary">完了</button><button class="off-b ghost">外す</button></div>`;
+      slot.querySelector(".done-b").addEventListener("click", () => completeItem(i));
+      slot.querySelector(".off-b").addEventListener("click", () => { toggleTop3(i.id); renderToday(); });
+    } else {
+      slot.innerHTML = `<button class="add-b ghost">＋ ${s + 1}枠目に入れる</button>`;
+      slot.querySelector(".add-b").addEventListener("click", () => openTop3Picker(pool));
+    }
+    box.appendChild(slot);
   }
+}
 
-  // フォーカスカード
-  if (focused) {
-    $("#focus-card").innerHTML = `
-      <div class="name">${esc(focused.name)}</div>
-      <div class="meta">${metaText(focused)}</div>
-      <div class="actions">
-        <button class="done-btn">やった ✅</button>
+function openTop3Picker(pool) {
+  const cands = pool.filter((i) => i.kind === "task" && !i.top3);
+  const box = $("#top3");
+  const picker = document.createElement("div");
+  picker.className = "t3-picker";
+  picker.innerHTML = cands.length
+    ? `<p class="muted">TOP3に入れるタスクを選ぶ:</p>` +
+      cands.map((i) => `<button type="button" data-id="${i.id}">${esc(i.name)}</button>`).join("") +
+      `<button type="button" class="cancel-b ghost">やめる</button>`
+    : `<p class="muted">入れられるタスクがありません。タスクタブで追加してください。</p><button type="button" class="cancel-b ghost">閉じる</button>`;
+  box.appendChild(picker);
+  picker.querySelector(".cancel-b").addEventListener("click", () => renderToday());
+  picker.querySelectorAll("button[data-id]").forEach((b) => {
+    b.addEventListener("click", () => { toggleTop3(b.dataset.id); renderToday(); });
+  });
+}
+
+function renderNowOne(pool) {
+  const box = $("#now-one");
+  const i = nowOneId ? byId(pool, nowOneId) : null;
+  if (!i) { box.innerHTML = `<p class="muted">タスクがありません。タスクタブで足すと、ここに1個ハイライトされます。</p>`; return; }
+  box.innerHTML = `
+    <div class="now-card">
+      <div class="now-name">${esc(i.name)}</div>
+      <div class="now-meta">${metaText(i)}</div>
+      <div class="row now-actions">
+        <button class="done-btn primary">やった ✅</button>
         <button class="later-btn">あとで</button>
-        <button class="skip-btn">今日はやらない</button>
-      </div>`;
-    $("#focus-card .done-btn").addEventListener("click", () => act("done"));
-    $("#focus-card .later-btn").addEventListener("click", () => act("later"));
-    $("#focus-card .skip-btn").addEventListener("click", () => act("skip"));
-  }
+      </div>
+      <div class="row now-repick">
+        <span class="muted">選び直す:</span>
+        <button class="rp-pri ghost">優先度順</button>
+        <button class="rp-rnd ghost">ランダム</button>
+      </div>
+    </div>`;
+  box.querySelector(".done-btn").addEventListener("click", () => completeItem(i));
+  box.querySelector(".later-btn").addEventListener("click", () => { addLater(i.id); nowOneId = null; renderToday(); });
+  box.querySelector(".rp-pri").addEventListener("click", () => { nowOneMode = "priority"; nowOneId = null; renderToday(); });
+  box.querySelector(".rp-rnd").addEventListener("click", () => { nowOneMode = "random"; nowOneId = null; renderToday(); });
+}
 
-  // 残りリスト
-  const rest = $("#today-rest");
-  rest.innerHTML = "";
-  for (const i of items.slice(focused ? 0 : 3)) {
-    if (focused && i.id === focused.id) continue;
+function renderRest(pool) {
+  const t3ids = getTop3();
+  const rest = pool.filter((i) => !t3ids.includes(i.id) && i.id !== nowOneId);
+  const ul = $("#today-rest");
+  ul.innerHTML = "";
+  for (const i of rest) {
     const li = document.createElement("li");
-    li.innerHTML = `<span class="name">${esc(i.name)}</span><span class="meta">${metaText(i)}</span>`;
-    li.addEventListener("click", () => { focused = i; renderToday(); });
-    rest.appendChild(li);
+    const canTop3 = i.kind === "task" && t3ids.length < 3;
+    li.innerHTML = `<span class="name">${esc(i.name)}</span><span class="meta">${metaText(i)}</span>
+      ${canTop3 ? '<button class="t3-b">TOP3</button>' : ""}<button class="done-b2">完了</button>`;
+    if (canTop3) li.querySelector(".t3-b").addEventListener("click", () => { toggleTop3(i.id); renderToday(); });
+    li.querySelector(".done-b2").addEventListener("click", () => completeItem(i));
+    ul.appendChild(li);
   }
 }
 
-async function act(action) {
-  const i = focused;
-  if (!i) return;
-  if (action === "done") {
-    if (i.kind === "task") {
-      await sb.from("tasks").update({ status: "done", done_at: new Date().toISOString() }).eq("id", i.id);
-    } else {
-      await sb.from("routine_log").insert({ routine_id: i.id, on_date: todayStr(), result: "done" });
-    }
-  } else if (action === "later") {
-    addLater(i.id);
-  } else if (action === "skip") {
-    addSkip(i.id);
-    if (i.kind === "task") {
-      await sb.from("tasks").update({ postpone_count: i.postpone_count + 1 }).eq("id", i.id);
-    } else {
-      await sb.from("routine_log").insert({ routine_id: i.id, on_date: todayStr(), result: "skip" });
-    }
-  }
-  focused = null;
-  await refresh();
+// 余白ブロック(何もしない時間・端末内保存)
+const getBlank = () => JSON.parse(localStorage.getItem("blank") || '{"start":"13:00","min":30}');
+function addMinutes(hhmm, min) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const t = h * 60 + m + min;
+  return `${String(Math.floor(t / 60) % 24).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
 }
+function renderBlank() {
+  const b = getBlank();
+  $("#blank-block").innerHTML = `
+    <div class="blank-card">
+      <span>🌙 余白 ${b.start}–${addMinutes(b.start, b.min)}(${b.min}分・何もしない)</span>
+      <button class="edit-b ghost">変更</button>
+    </div>`;
+  $("#blank-block .edit-b").addEventListener("click", () => {
+    $("#blank-block").innerHTML = `
+      <div class="blank-card row">
+        <input type="time" class="bs" value="${b.start}">
+        <input type="number" class="bm" min="5" step="5" value="${b.min}" style="width:64px">分
+        <button class="save-b primary">保存</button>
+      </div>`;
+    $("#blank-block .save-b").addEventListener("click", () => {
+      const start = $("#blank-block .bs").value || "13:00";
+      const min = Number($("#blank-block .bm").value) || 30;
+      localStorage.setItem("blank", JSON.stringify({ start, min }));
+      renderBlank();
+    });
+  });
+}
+
+// ---------- ポモドーロ ----------
+const WORK_SEC = 25 * 60, BREAK_SEC = 5 * 60;
+let pomo = { phase: "work", remaining: WORK_SEC, running: false, endsAt: 0 };
+const pomoKey = () => `pomo:${todayStr()}`;
+const pomoCount = () => Number(localStorage.getItem(pomoKey()) || 0);
+const pomoInc = () => localStorage.setItem(pomoKey(), pomoCount() + 1);
+const fmtSec = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+function updatePomo() {
+  const el = $("#pomodoro");
+  if (!el) return;
+  el.classList.toggle("work", pomo.phase === "work");
+  el.classList.toggle("break", pomo.phase === "break");
+  $("#pomo-phase").textContent = pomo.phase === "work" ? "作業" : "休憩";
+  $("#pomo-time").textContent = fmtSec(pomo.remaining);
+  $("#pomo-toggle").textContent = pomo.running ? "一時停止" : "開始";
+  $("#pomo-count").textContent = `今日 ${pomoCount()}セット`;
+}
+
+function updatePomoTask(pool) {
+  const i = nowOneId && pool ? byId(pool, nowOneId) : null;
+  const el = $("#pomo-task");
+  if (el) el.textContent = i ? "▶ " + i.name : "紐付けなし(今すぐ1個に自動連動)";
+}
+
+function beep() {
+  if (localStorage.getItem("pomoSound") === "off") return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880; g.gain.value = 0.08;
+    o.start(); o.stop(ctx.currentTime + 0.25);
+  } catch (e) { /* 無音でよい */ }
+}
+
+function pomoAdvance(natural) {
+  const wasWork = pomo.phase === "work";
+  if (natural) { if (wasWork) pomoInc(); beep(); }
+  pomo.phase = wasWork ? "break" : "work";
+  pomo.remaining = pomo.phase === "work" ? WORK_SEC : BREAK_SEC;
+  pomo.endsAt = Date.now() + pomo.remaining * 1000; // 自動で次フェーズへ
+  updatePomo();
+}
+
+setInterval(() => {
+  if (!pomo.running) return;
+  const left = Math.max(0, Math.round((pomo.endsAt - Date.now()) / 1000));
+  pomo.remaining = left;
+  if (left <= 0) pomoAdvance(true);
+  else updatePomo();
+}, 500);
+
+$("#pomo-toggle").addEventListener("click", () => {
+  if (pomo.running) {
+    pomo.remaining = Math.max(0, Math.round((pomo.endsAt - Date.now()) / 1000));
+    pomo.running = false;
+  } else {
+    pomo.endsAt = Date.now() + pomo.remaining * 1000;
+    pomo.running = true;
+  }
+  updatePomo();
+});
+$("#pomo-skip").addEventListener("click", () => pomoAdvance(false));
+$("#pomo-sound").addEventListener("click", () => {
+  const off = localStorage.getItem("pomoSound") === "off";
+  localStorage.setItem("pomoSound", off ? "on" : "off");
+  $("#pomo-sound").textContent = off ? "🔔" : "🔕";
+});
+if (localStorage.getItem("pomoSound") === "off") $("#pomo-sound").textContent = "🔕";
+updatePomo();
 
 // ---------- タスクタブ ----------
 $("#task-form").addEventListener("submit", async (e) => {
