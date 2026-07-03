@@ -863,6 +863,108 @@ function renderGoals() {
   }
 }
 
+// ---------- アイデア:ブレインダンプ ----------
+$("#braindump").value = localStorage.getItem("braindump") || "";
+$("#braindump").addEventListener("input", () => localStorage.setItem("braindump", $("#braindump").value));
+$("#bd-tasks").addEventListener("click", () => {
+  const lines = $("#braindump").value.split("\n").map((l) => l.trim()).filter((l) => l.length >= 2);
+  const box = $("#bd-picker");
+  if (!lines.length) { box.innerHTML = `<p class="muted">先にアイデアを書いてください。</p>`; return; }
+  box.innerHTML = `<p class="muted">タスクにする行をタップ(タスク化した行はダンプから消えます):</p>` +
+    lines.map((l, i) => `<button type="button" data-i="${i}">${esc(l)}</button>`).join("");
+  box.querySelectorAll("button[data-i]").forEach((b) => {
+    b.addEventListener("click", async () => {
+      const line = lines[Number(b.dataset.i)];
+      await sb.from("tasks").insert({ name: line.slice(0, 100), source: "braindump" });
+      const remaining = $("#braindump").value.split("\n").filter((l) => l.trim() !== line);
+      $("#braindump").value = remaining.join("\n");
+      localStorage.setItem("braindump", $("#braindump").value);
+      b.remove();
+      await refresh();
+    });
+  });
+});
+
+// ---------- 運用:連絡タイム + 週一人会議 ----------
+const getSlots = () => JSON.parse(localStorage.getItem("contactSlots") || "[]");
+const setSlots = (a) => localStorage.setItem("contactSlots", JSON.stringify(a.slice(0, 2)));
+let ctFilterOn = false;
+
+function nowHM() {
+  const n = new Date();
+  return `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+}
+function nowInSlot() {
+  const hm = nowHM();
+  return getSlots().some((s) => s.start <= hm && hm <= s.end);
+}
+
+$("#ct-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const start = $("#ct-start").value, end = $("#ct-end").value;
+  if (!start || !end) return;
+  const a = getSlots();
+  if (a.length >= 2) { alert("連絡タイムは1日2枠までがおすすめです。"); return; }
+  a.push({ start, end });
+  a.sort((x, y) => x.start.localeCompare(y.start));
+  setSlots(a);
+  e.target.reset();
+  renderOps();
+});
+$("#ct-filter").addEventListener("click", () => {
+  ctFilterOn = !ctFilterOn;
+  $("#ct-filter").classList.toggle("on", ctFilterOn);
+  renderContact();
+});
+
+function renderOps() { renderContact(); renderSolo(); }
+
+function renderContact() {
+  const inSlot = nowInSlot();
+  $("#contact-status").innerHTML = inSlot
+    ? `<div class="ct-on">🟢 連絡タイムです。まとめて返信しましょう。</div>`
+    : `<div class="ct-off">連絡は指定時間にまとめて。今は連絡タスクを目立たせません。</div>`;
+
+  const slots = getSlots();
+  const cs = $("#contact-slots");
+  cs.innerHTML = slots.length
+    ? slots.map((s, i) => `<div class="ct-slot">🕐 ${s.start}–${s.end}<button class="del-slot ghost" data-i="${i}">削除</button></div>`).join("")
+    : `<p class="muted">まだ枠がありません。1日1〜2枠がおすすめ(例:12:00–12:30 / 20:00–20:20)。</p>`;
+  cs.querySelectorAll(".del-slot").forEach((b) => b.addEventListener("click", () => {
+    const a = getSlots(); a.splice(Number(b.dataset.i), 1); setSlots(a); renderOps();
+  }));
+
+  const box = $("#ct-list");
+  if (!(ctFilterOn || inSlot)) { box.innerHTML = ""; return; }
+  const tasks = state.tasks.filter((t) => t.category === "連絡");
+  box.innerHTML = tasks.length
+    ? `<ul class="list">` + tasks.map((t) => `<li data-id="${t.id}"><span class="name">📮 ${esc(t.name)}</span><button class="done-c">完了</button></li>`).join("") + `</ul>`
+    : `<p class="muted">連絡カテゴリのタスクはありません。</p>`;
+  box.querySelectorAll(".done-c").forEach((b) => b.addEventListener("click", async () => {
+    await sb.from("tasks").update({ status: "done", done_at: new Date().toISOString() }).eq("id", b.closest("li").dataset.id);
+    await refresh();
+  }));
+}
+
+const soloKey = () => `solo:${weekStartStr()}`;
+const getSolo = () => JSON.parse(localStorage.getItem(soloKey()) || '{"when":"","fun":""}');
+function renderSolo() {
+  const s = getSolo();
+  $("#solo-meeting").innerHTML = `
+    <div class="solo-card">
+      <p class="muted">今週の一人会議(1人で考える時間)、いつやる?</p>
+      <input id="solo-when" placeholder="例:土曜の朝、カフェで" value="${esc(s.when)}">
+      <p class="muted">今週やりたい楽しいこと</p>
+      <input id="solo-fun" placeholder="例:サウナ / 映画" value="${esc(s.fun)}">
+      <div class="row"><button id="solo-save" class="primary">保存</button><span id="solo-msg" class="muted"></span></div>
+    </div>`;
+  $("#solo-save").addEventListener("click", () => {
+    localStorage.setItem(soloKey(), JSON.stringify({ when: $("#solo-when").value, fun: $("#solo-fun").value }));
+    $("#solo-msg").textContent = "保存しました ✅";
+    setTimeout(() => { const m = $("#solo-msg"); if (m) m.textContent = ""; }, 2500);
+  });
+}
+
 // ---------- タブ切り替え ----------
 document.querySelectorAll("#tabbar button").forEach((b) => {
   b.addEventListener("click", () => {
@@ -884,6 +986,7 @@ async function refresh() {
   renderTasks();
   renderRoutines();
   renderResults();
+  renderOps();
   await Promise.all([loadBucket(), loadInbox()]);
 }
 

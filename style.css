@@ -189,6 +189,24 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 .goal-ctl .gr { flex: 1; }
 .goal-ctl button { padding: 6px 10px; font-size: .8rem; }
 
+/* アイデア:ブレインダンプ */
+textarea { width: 100%; font: inherit; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid #d8dbe4; resize: vertical; }
+#bd-picker { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+#bd-picker button[data-i] { text-align: left; background: #f0f1f7; font-size: .85rem; padding: 8px 10px; }
+#bd-picker button[data-i]:active { background: var(--indigo); color: #fff; }
+
+/* 運用:連絡タイム + 一人会議 */
+.ct-on { background: #ecfdf3; color: #067647; border-radius: 10px; padding: 10px 12px; font-weight: 700; }
+.ct-off { background: #f2f3f7; color: var(--muted); border-radius: 10px; padding: 10px 12px; font-size: .85rem; }
+.ct-slot { background: var(--card); border-radius: 10px; padding: 8px 12px; margin: 6px 0;
+  display: flex; align-items: center; justify-content: space-between; }
+.ct-slot .del-slot { padding: 4px 8px; font-size: .78rem; }
+#ct-form { align-items: center; gap: 6px; margin: 8px 0; }
+#ct-list { margin-top: 8px; }
+.solo-card { background: var(--card); border-radius: var(--radius); padding: 14px; }
+.solo-card input { width: 100%; margin: 4px 0 10px; }
+
 /* タブバー */
 #tabbar { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
   background: var(--card); border-top: 1px solid #e3e5ec;

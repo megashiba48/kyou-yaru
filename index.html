@@ -168,11 +168,40 @@
       <div id="done-list"></div>
     </section>
 
-    <!-- 受信箱タブ -->
+    <!-- アイデアタブ(ブレインダンプ + Obsidian受信箱) -->
     <section id="tab-inbox" class="tab hidden">
-      <h2>受信箱</h2>
+      <h2>アイデア</h2>
+      <p class="section-label">ブレインダンプ(思いつくまま吐き出す)</p>
+      <textarea id="braindump" rows="6" placeholder="頭の中を全部ここへ。1行1アイデアで書くと、下でタスクに仕分けしやすい。"></textarea>
+      <div class="row">
+        <button id="bd-tasks" class="primary">1行ずつタスクに仕分け</button>
+        <span id="bd-msg" class="muted">書いた内容は自動保存されます</span>
+      </div>
+      <div id="bd-picker"></div>
+
+      <p class="section-label">Obsidian受信箱</p>
       <p class="muted">Obsidianに書いたアイデアが1つずつ届きます。タスクにするか、いらなければアーカイブ。処理したものは二度と出ません。</p>
       <div id="inbox-list"></div>
+    </section>
+
+    <!-- 運用タブ(連絡タイム + 週一人会議) -->
+    <section id="tab-ops" class="tab hidden">
+      <h2>運用</h2>
+
+      <p class="section-label">連絡タイム(まとめて処理)</p>
+      <div id="contact-status"></div>
+      <div id="contact-slots"></div>
+      <form id="ct-form" class="row">
+        <input id="ct-start" type="time" required>
+        <span>–</span>
+        <input id="ct-end" type="time" required>
+        <button class="primary" type="submit">枠を追加</button>
+      </form>
+      <button id="ct-filter" type="button" class="chip">📮 連絡カテゴリだけ表示</button>
+      <div id="ct-list"></div>
+
+      <p class="section-label">週一人会議</p>
+      <div id="solo-meeting"></div>
     </section>
 
     <!-- バケットタブ -->
@@ -206,15 +235,16 @@
       </form>
       <div id="bucket-chips" class="chips"></div>
       <ul id="bucket-list" class="list"></ul>
-      <p class="muted">app v4.8</p>
+      <p class="muted">app v4.9</p>
     </section>
   </main>
 
   <nav id="tabbar">
     <button data-tab="today" class="active">📌<span>今日</span></button>
     <button data-tab="tasks">✅<span>タスク</span></button>
+    <button data-tab="inbox">💡<span>アイデア</span></button>
+    <button data-tab="ops">🔔<span>運用</span></button>
     <button data-tab="results">🏆<span>実績</span></button>
-    <button data-tab="inbox">📥<span>受信箱</span></button>
     <button data-tab="bucket">🪣<span>バケット</span></button>
   </nav>
 </div>
