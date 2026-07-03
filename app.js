@@ -437,8 +437,10 @@ function renderTimeReco() {
   const focus = state.tasks.filter((t) => t.focus_needed);
   const light = state.tasks.filter((t) => (t.minutes && t.minutes <= 20) || t.delegate);
   let cls, msg, list;
-  if ((h >= 8 && h < 10) || h >= 22 || h < 2) {
-    cls = "reco reco-focus"; msg = "🌅 今は集中に良い時間。重い『集中タスク』をどうぞ。"; list = focus;
+  if (h >= 8 && h < 10) {
+    cls = "reco reco-focus"; msg = "🌅 朝の集中タイム。重い『集中タスク』をどうぞ。"; list = focus;
+  } else if (h >= 19 && h < 21) {
+    cls = "reco reco-focus"; msg = "🌙 夜の集中タイム(21時まで)。重い『集中タスク』を。"; list = focus;
   } else if (h >= 12 && h < 15) {
     cls = "reco reco-light"; msg = "🥱 昼は一番しんどい時間。軽いタスク・委任タスクを。集中タスクは朝か夜に。"; list = light;
   } else {
