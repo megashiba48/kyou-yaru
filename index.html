@@ -95,10 +95,22 @@
       <p class="muted">人生でやりたいことリスト(Phase 3で実装予定)。</p>
     </section>
 
-    <!-- 日記タブ(Phase 2) -->
+    <!-- 日記タブ -->
     <section id="tab-diary" class="tab hidden">
-      <h2>日記</h2>
-      <p class="muted">3つの質問で1日を記録(Phase 2で実装予定)。</p>
+      <h2>日記 <span id="diary-streak" class="streak"></span></h2>
+      <p class="section-label">1. 今日の出来事</p>
+      <textarea id="diary-events" rows="3" placeholder="・箇条書きでOK"></textarea>
+      <p class="section-label">2. どんな気持ちになったか</p>
+      <textarea id="diary-feelings" rows="3" placeholder="・"></textarea>
+      <p class="section-label">3. そこから導き出した結論</p>
+      <textarea id="diary-conclusion" rows="3" placeholder="・"></textarea>
+      <div class="row">
+        <button id="diary-save" class="primary">今日の日記を保存</button>
+        <span id="diary-msg" class="muted"></span>
+      </div>
+      <p class="section-label">過去の日記</p>
+      <input id="diary-search" type="search" placeholder="🔍 全文検索">
+      <div id="diary-list"></div>
     </section>
   </main>
 

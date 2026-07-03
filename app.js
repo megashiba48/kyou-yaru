@@ -275,6 +275,78 @@ function renderRoutines() {
   }
 }
 
+// ---------- 日記タブ ----------
+let diaryEntries = [];
+
+async function loadDiary() {
+  const { data } = await sb.from("diary_entries").select("*")
+    .order("on_date", { ascending: false }).limit(365);
+  diaryEntries = data || [];
+  const today = diaryEntries.find((e) => e.on_date === todayStr());
+  if (document.activeElement?.id?.startsWith("diary-")) return; // 入力中は上書きしない
+  $("#diary-events").value = today?.events || "";
+  $("#diary-feelings").value = today?.feelings || "";
+  $("#diary-conclusion").value = today?.conclusion || "";
+  renderDiaryStreak();
+  renderDiaryList();
+}
+
+function renderDiaryStreak() {
+  const dates = new Set(diaryEntries.map((e) => e.on_date));
+  let streak = 0;
+  const d = new Date();
+  if (!dates.has(todayStr())) d.setDate(d.getDate() - 1); // 今日未記入なら昨日から数える
+  for (;;) {
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (!dates.has(key)) break;
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  $("#diary-streak").textContent = streak > 0 ? `🔥 ${streak}日連続` : "";
+}
+
+$("#diary-save").addEventListener("click", async () => {
+  const payload = {
+    on_date: todayStr(),
+    events: $("#diary-events").value.trim() || null,
+    feelings: $("#diary-feelings").value.trim() || null,
+    conclusion: $("#diary-conclusion").value.trim() || null,
+  };
+  const { data: { user } } = await sb.auth.getUser();
+  const { error } = await sb.from("diary_entries")
+    .upsert({ ...payload, user_id: user.id }, { onConflict: "user_id,on_date" });
+  $("#diary-msg").textContent = error ? "保存できませんでした: " + error.message : "保存しました ✅";
+  setTimeout(() => { $("#diary-msg").textContent = ""; }, 3000);
+  await loadDiary();
+});
+
+$("#diary-search").addEventListener("input", renderDiaryList);
+
+function renderDiaryList() {
+  const q = $("#diary-search").value.trim();
+  const box = $("#diary-list");
+  box.innerHTML = "";
+  const hits = diaryEntries.filter((e) => {
+    if (e.on_date === todayStr() && !q) return false; // 今日の分は上のフォームにある
+    if (!q) return true;
+    return [e.events, e.feelings, e.conclusion].some((t) => t && t.includes(q));
+  }).slice(0, 30);
+  if (!hits.length) {
+    box.innerHTML = `<p class="muted">${q ? "見つかりませんでした" : "過去の日記はまだありません"}</p>`;
+    return;
+  }
+  for (const e of hits) {
+    const d = new Date(e.on_date + "T00:00:00");
+    const card = document.createElement("div");
+    card.className = "diary-card";
+    card.innerHTML = `<div class="date">${e.on_date.replaceAll("-", "/")}(${WEEKDAYS[d.getDay()]})</div>
+      ${e.events ? `<p><b>出来事:</b>${esc(e.events)}</p>` : ""}
+      ${e.feelings ? `<p><b>気持ち:</b>${esc(e.feelings)}</p>` : ""}
+      ${e.conclusion ? `<p><b>結論:</b>${esc(e.conclusion)}</p>` : ""}`;
+    box.appendChild(card);
+  }
+}
+
 // ---------- タブ切り替え ----------
 document.querySelectorAll("#tabbar button").forEach((b) => {
   b.addEventListener("click", () => {
@@ -294,6 +366,7 @@ async function refresh() {
   renderToday();
   renderTasks();
   renderRoutines();
+  await loadDiary();
 }
 
 // ---------- Service Worker ----------

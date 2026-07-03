@@ -74,6 +74,16 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 .days label.on { background: var(--indigo); color: #fff; }
 .days input { display: none; }
 
+/* 日記 */
+textarea { width: 100%; font: inherit; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid #d8dbe4; resize: vertical; }
+.streak { font-size: .85rem; color: #ea580c; font-weight: 700; }
+#diary-search { width: 100%; margin-bottom: 10px; }
+.diary-card { background: var(--card); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
+.diary-card .date { font-weight: 700; font-size: .85rem; color: var(--indigo); margin-bottom: 4px; }
+.diary-card p { margin: 4px 0; font-size: .9rem; white-space: pre-wrap; }
+.diary-card b { color: var(--muted); font-weight: 600; margin-right: 4px; }
+
 /* タブバー */
 #tabbar { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
   background: var(--card); border-top: 1px solid #e3e5ec;
