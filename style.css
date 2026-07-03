@@ -76,16 +76,6 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 .days label.on { background: var(--indigo); color: #fff; }
 .days input { display: none; }
 
-/* 日記 */
-textarea { width: 100%; font: inherit; padding: 10px 12px; border-radius: 10px;
-  border: 1px solid #d8dbe4; resize: vertical; }
-.streak { font-size: .85rem; color: #ea580c; font-weight: 700; }
-#diary-search { width: 100%; margin-bottom: 10px; }
-.diary-card { background: var(--card); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
-.diary-card .date { font-weight: 700; font-size: .85rem; color: var(--indigo); margin-bottom: 4px; }
-.diary-card p { margin: 4px 0; font-size: .9rem; white-space: pre-wrap; }
-.diary-card b { color: var(--muted); font-weight: 600; margin-right: 4px; }
-
 /* タイムバケット */
 #life-stats { font-size: 1rem; }
 #life-stats .big { color: var(--indigo); font-size: 1.5rem; font-weight: 800; }
@@ -101,19 +91,10 @@ textarea { width: 100%; font: inherit; padding: 10px 12px; border-radius: 10px;
 .chip { font-size: .8rem; padding: 6px 10px; border-radius: 999px; background: #e8e9f0; }
 .chip.on { background: var(--indigo); color: #fff; font-weight: 700; }
 
-/* 受信箱 */
-.inbox-card { background: var(--card); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 10px; }
-.inbox-card .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.inbox-card .fname { font-weight: 700; }
-.inbox-card .meta { color: var(--muted); font-size: .75rem; white-space: nowrap; }
-.inbox-card .body { white-space: pre-wrap; font-size: .9rem; margin: 8px 0; }
-.inbox-card .body.clip { max-height: 7.5em; overflow: hidden;
-  -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
-.inbox-card .row button { font-size: .8rem; padding: 8px 10px; }
-.line-picker { border-top: 1px solid #eceef4; margin-top: 8px; padding-top: 8px;
-  display: flex; flex-direction: column; gap: 6px; }
-.line-picker button { text-align: left; font-size: .85rem; background: #f0f1f7; }
-.line-picker button:active { background: var(--indigo); color: #fff; }
+/* 受信箱(アイデア1件=1カード) */
+.inbox-card { background: var(--card); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; }
+.inbox-card .idea { font-size: .95rem; margin: 0 0 10px; white-space: pre-wrap; }
+.inbox-card .row button { font-size: .85rem; padding: 8px 12px; }
 
 /* タブバー */
 #tabbar { position: fixed; bottom: 0; left: 0; right: 0; display: flex;

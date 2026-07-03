@@ -96,7 +96,7 @@
     <!-- 受信箱タブ -->
     <section id="tab-inbox" class="tab hidden">
       <h2>受信箱</h2>
-      <p class="muted">Obsidianの「アイデアメモ」が15分ごとに届きます(Macが起動中のとき)。</p>
+      <p class="muted">Obsidianに書いたアイデアが1つずつ届きます。タスクにするか、いらなければアーカイブ。処理したものは二度と出ません。</p>
       <div id="inbox-list"></div>
     </section>
 
@@ -131,25 +131,7 @@
       </form>
       <div id="bucket-chips" class="chips"></div>
       <ul id="bucket-list" class="list"></ul>
-      <p class="muted">app v4.3</p>
-    </section>
-
-    <!-- 日記タブ -->
-    <section id="tab-diary" class="tab hidden">
-      <h2>日記 <span id="diary-streak" class="streak"></span></h2>
-      <p class="section-label">1. 今日の出来事</p>
-      <textarea id="diary-events" rows="3" placeholder="・箇条書きでOK"></textarea>
-      <p class="section-label">2. どんな気持ちになったか</p>
-      <textarea id="diary-feelings" rows="3" placeholder="・"></textarea>
-      <p class="section-label">3. そこから導き出した結論</p>
-      <textarea id="diary-conclusion" rows="3" placeholder="・"></textarea>
-      <div class="row">
-        <button id="diary-save" class="primary">今日の日記を保存</button>
-        <span id="diary-msg" class="muted"></span>
-      </div>
-      <p class="section-label">過去の日記</p>
-      <input id="diary-search" type="search" placeholder="🔍 全文検索">
-      <div id="diary-list"></div>
+      <p class="muted">app v4.4</p>
     </section>
   </main>
 
@@ -158,7 +140,6 @@
     <button data-tab="tasks">✅<span>タスク</span></button>
     <button data-tab="inbox">📥<span>受信箱</span></button>
     <button data-tab="bucket">🪣<span>バケット</span></button>
-    <button data-tab="diary">📓<span>日記</span></button>
   </nav>
 </div>
 

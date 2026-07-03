@@ -346,77 +346,6 @@ function renderRoutines() {
   }
 }
 
-// ---------- 日記タブ ----------
-let diaryEntries = [];
-
-async function loadDiary() {
-  const { data } = await sb.from("diary_entries").select("*")
-    .order("on_date", { ascending: false }).limit(365);
-  diaryEntries = data || [];
-  const today = diaryEntries.find((e) => e.on_date === todayStr());
-  if (document.activeElement?.id?.startsWith("diary-")) return; // 入力中は上書きしない
-  $("#diary-events").value = today?.events || "";
-  $("#diary-feelings").value = today?.feelings || "";
-  $("#diary-conclusion").value = today?.conclusion || "";
-  renderDiaryStreak();
-  renderDiaryList();
-}
-
-function renderDiaryStreak() {
-  const dates = new Set(diaryEntries.map((e) => e.on_date));
-  let streak = 0;
-  const d = new Date();
-  if (!dates.has(todayStr())) d.setDate(d.getDate() - 1); // 今日未記入なら昨日から数える
-  for (;;) {
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    if (!dates.has(key)) break;
-    streak++;
-    d.setDate(d.getDate() - 1);
-  }
-  $("#diary-streak").textContent = streak > 0 ? `🔥 ${streak}日連続` : "";
-}
-
-$("#diary-save").addEventListener("click", async () => {
-  const payload = {
-    on_date: todayStr(),
-    events: $("#diary-events").value.trim() || null,
-    feelings: $("#diary-feelings").value.trim() || null,
-    conclusion: $("#diary-conclusion").value.trim() || null,
-  };
-  const { data: { user } } = await sb.auth.getUser();
-  const { error } = await sb.from("diary_entries")
-    .upsert({ ...payload, user_id: user.id }, { onConflict: "user_id,on_date" });
-  $("#diary-msg").textContent = error ? "保存できませんでした: " + error.message : "保存しました ✅";
-  setTimeout(() => { $("#diary-msg").textContent = ""; }, 3000);
-  await loadDiary();
-});
-
-$("#diary-search").addEventListener("input", renderDiaryList);
-
-function renderDiaryList() {
-  const q = $("#diary-search").value.trim();
-  const box = $("#diary-list");
-  box.innerHTML = "";
-  const hits = diaryEntries.filter((e) => {
-    if (!q) return true;
-    return [e.events, e.feelings, e.conclusion].some((t) => t && t.includes(q));
-  }).slice(0, 60);
-  if (!hits.length) {
-    box.innerHTML = `<p class="muted">${q ? "見つかりませんでした" : "まだ日記がありません。今日の3問から始めましょう。"}</p>`;
-    return;
-  }
-  for (const e of hits) {
-    const d = new Date(e.on_date + "T00:00:00");
-    const card = document.createElement("div");
-    card.className = "diary-card";
-    card.innerHTML = `<div class="date">${e.on_date.replaceAll("-", "/")}(${WEEKDAYS[d.getDay()]})${e.on_date === todayStr() ? "・今日" : ""}</div>
-      ${e.events ? `<p><b>出来事:</b>${esc(e.events)}</p>` : ""}
-      ${e.feelings ? `<p><b>気持ち:</b>${esc(e.feelings)}</p>` : ""}
-      ${e.conclusion ? `<p><b>結論:</b>${esc(e.conclusion)}</p>` : ""}`;
-    box.appendChild(card);
-  }
-}
-
 // ---------- タイムバケット ----------
 const HORIZONS = { "1y": "1年以内", "3y": "3年以内", "5y": "5年以内", "10y": "10年以内", "life": "死ぬまでに" };
 let bucketItems = [];
@@ -520,13 +449,13 @@ function renderBucketList() {
   }
 }
 
-// ---------- 受信箱(Obsidian) ----------
+// ---------- 受信箱(Obsidian・アイデア1件=1カード) ----------
 let inboxNotes = [];
 
 async function loadInbox() {
   try {
     const { data, error } = await sb.from("inbox_notes").select("*")
-      .neq("state", "archived").order("modified_at", { ascending: false });
+      .eq("state", "new").order("modified_at", { ascending: false }).limit(200);
     if (error) throw new Error(error.message);
     inboxNotes = data || [];
     renderInbox();
@@ -539,46 +468,22 @@ function renderInbox() {
   const box = $("#inbox-list");
   box.innerHTML = "";
   if (!inboxNotes.length) {
-    box.innerHTML = `<p class="muted">まだ届いていません。Obsidianにメモを書くと(次の同期で)ここに出ます。</p>`;
+    box.innerHTML = `<p class="muted">新しいアイデアはありません。Obsidianに1行書くと、次の同期でここに1件ずつ届きます。</p>`;
     return;
   }
   for (const n of inboxNotes) {
     const card = document.createElement("div");
     card.className = "inbox-card";
-    const long = n.content.length > 300;
     card.innerHTML = `
-      <div class="head">
-        <span class="fname">📝 ${esc(n.filename.replace(/\.md$/, ""))}</span>
-        <span class="meta">${n.modified_at.slice(5, 16).replace("T", " ")}${n.state === "tasked" ? "・タスク化済" : ""}</span>
-      </div>
-      <p class="body${long ? " clip" : ""}">${esc(n.content)}</p>
+      <p class="idea">💡 ${esc(n.content)}</p>
       <div class="row">
-        ${long ? '<button type="button" class="more-b">全文</button>' : ""}
-        <button type="button" class="task-b">選んでタスク化</button>
+        <button type="button" class="task-b primary">タスクにする</button>
         <button type="button" class="arch-b">アーカイブ</button>
       </div>`;
-    card.querySelector(".more-b")?.addEventListener("click", (e) => {
-      card.querySelector(".body").classList.toggle("clip");
-      e.target.textContent = card.querySelector(".body").classList.contains("clip") ? "全文" : "たたむ";
-    });
-    // 行を選んでタスク化:メモの行一覧から1行選ぶ
-    card.querySelector(".task-b").addEventListener("click", () => {
-      const lines = n.content.split("\n").map((l) => l.replace(/^[-*・\s]+/, "").trim())
-        .filter((l) => l && l.length >= 2).slice(0, 30);
-      const picker = document.createElement("div");
-      picker.className = "line-picker";
-      picker.innerHTML = `<p class="muted">タスクにする行をタップ:</p>` +
-        lines.map((l, i) => `<button type="button" data-i="${i}">${esc(l.slice(0, 50))}</button>`).join("") +
-        `<button type="button" class="ghost cancel-b">やめる</button>`;
-      card.appendChild(picker);
-      picker.querySelector(".cancel-b").addEventListener("click", () => picker.remove());
-      picker.querySelectorAll("button[data-i]").forEach((b) => {
-        b.addEventListener("click", async () => {
-          await sb.from("tasks").insert({ name: lines[Number(b.dataset.i)].slice(0, 100), source: "inbox" });
-          await sb.from("inbox_notes").update({ state: "tasked" }).eq("id", n.id);
-          await refresh();
-        });
-      });
+    card.querySelector(".task-b").addEventListener("click", async () => {
+      await sb.from("tasks").insert({ name: n.content.slice(0, 100), source: "inbox" });
+      await sb.from("inbox_notes").update({ state: "tasked" }).eq("id", n.id);
+      await refresh();
     });
     card.querySelector(".arch-b").addEventListener("click", async () => {
       await sb.from("inbox_notes").update({ state: "archived" }).eq("id", n.id);
@@ -609,7 +514,7 @@ async function refresh() {
   renderTasks();
   renderRoutines();
   renderDone();
-  await Promise.all([loadDiary(), loadBucket(), loadInbox()]);
+  await Promise.all([loadBucket(), loadInbox()]);
 }
 
 // ---------- Service Worker ----------
