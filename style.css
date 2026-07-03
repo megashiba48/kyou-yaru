@@ -1,0 +1,85 @@
+:root {
+  --indigo: #4f46e5;
+  --bg: #f4f4f7;
+  --card: #ffffff;
+  --text: #1f2430;
+  --muted: #7a8194;
+  --danger: #dc2626;
+  --ok: #16a34a;
+  --radius: 14px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif; }
+.hidden { display: none !important; }
+.muted { color: var(--muted); font-size: 0.85rem; }
+
+/* ログイン */
+.auth-box { max-width: 360px; margin: 18vh auto 0; padding: 24px; background: var(--card);
+  border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,.06); text-align: center; }
+.auth-box h1 { margin: 0 0 8px; color: var(--indigo); }
+.auth-box input { width: 100%; margin: 12px 0; }
+
+/* 入力・ボタン共通 */
+input, select, button {
+  font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid #d8dbe4;
+  background: #fff;
+}
+button { cursor: pointer; border: none; background: #e8e9f0; }
+button.primary { background: var(--indigo); color: #fff; font-weight: 600; }
+button.ghost { background: transparent; color: var(--muted); }
+button.danger { background: #fee2e2; color: var(--danger); }
+
+/* レイアウト */
+#main { max-width: 560px; margin: 0 auto; padding: 16px 16px 90px; }
+h2 { font-size: 1.1rem; margin: 20px 0 10px; }
+.section-label { font-size: .8rem; font-weight: 700; color: var(--muted); margin: 18px 0 8px;
+  text-transform: uppercase; letter-spacing: .04em; }
+.row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.row input[type="number"] { width: 90px; }
+
+/* 候補3カード */
+#pick3 { display: flex; flex-direction: column; gap: 10px; }
+.pick-card { background: var(--card); border-radius: var(--radius); padding: 14px 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.05); display: flex; align-items: center; gap: 12px;
+  border: 2px solid transparent; }
+.pick-card:active { border-color: var(--indigo); }
+.pick-card .name { font-weight: 700; flex: 1; }
+.pick-card .meta { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+.pick-card .warn { color: var(--danger); font-size: .75rem; }
+
+/* フォーカスカード */
+#focus-card { background: var(--indigo); color: #fff; border-radius: var(--radius);
+  padding: 20px 18px; box-shadow: 0 6px 20px rgba(79,70,229,.35); }
+#focus-card .name { font-size: 1.3rem; font-weight: 800; margin-bottom: 4px; }
+#focus-card .meta { opacity: .8; font-size: .85rem; margin-bottom: 14px; }
+#focus-card .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+#focus-card .actions button { flex: 1; padding: 12px 8px; font-weight: 700; border-radius: 10px; }
+#focus-card .done-btn { background: #fff; color: var(--indigo); }
+#focus-card .later-btn { background: rgba(255,255,255,.22); color: #fff; }
+#focus-card .skip-btn { background: rgba(0,0,0,.18); color: #fff; }
+
+/* リスト */
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { background: var(--card); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 10px; }
+.list li .name { flex: 1; }
+.list li .meta { color: var(--muted); font-size: .75rem; white-space: nowrap; }
+.list li.done .name { text-decoration: line-through; color: var(--muted); }
+.list li button { padding: 6px 10px; font-size: .8rem; }
+
+/* 曜日チェック */
+.days { display: flex; gap: 4px; }
+.days label { font-size: .75rem; padding: 6px 8px; background: #e8e9f0; border-radius: 8px; }
+.days label.on { background: var(--indigo); color: #fff; }
+.days input { display: none; }
+
+/* タブバー */
+#tabbar { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
+  background: var(--card); border-top: 1px solid #e3e5ec;
+  padding-bottom: env(safe-area-inset-bottom); }
+#tabbar button { flex: 1; background: none; border-radius: 0; padding: 8px 0 6px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 1.2rem;
+  color: var(--muted); }
+#tabbar button span { font-size: .65rem; }
+#tabbar button.active { color: var(--indigo); font-weight: 700; }
