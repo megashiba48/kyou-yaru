@@ -461,6 +461,74 @@ function renderBucketList() {
   }
 }
 
+// ---------- 受信箱(Obsidian) ----------
+let inboxNotes = [];
+
+async function loadInbox() {
+  try {
+    const { data, error } = await sb.from("inbox_notes").select("*")
+      .neq("state", "archived").order("modified_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    inboxNotes = data || [];
+    renderInbox();
+  } catch (err) {
+    $("#inbox-list").innerHTML = `<p class="muted">⚠読み込みエラー: ${esc(err.message)}</p>`;
+  }
+}
+
+function renderInbox() {
+  const box = $("#inbox-list");
+  box.innerHTML = "";
+  if (!inboxNotes.length) {
+    box.innerHTML = `<p class="muted">まだ届いていません。Obsidianにメモを書くと(次の同期で)ここに出ます。</p>`;
+    return;
+  }
+  for (const n of inboxNotes) {
+    const card = document.createElement("div");
+    card.className = "inbox-card";
+    const long = n.content.length > 300;
+    card.innerHTML = `
+      <div class="head">
+        <span class="fname">📝 ${esc(n.filename.replace(/\.md$/, ""))}</span>
+        <span class="meta">${n.modified_at.slice(5, 16).replace("T", " ")}${n.state === "tasked" ? "・タスク化済" : ""}</span>
+      </div>
+      <p class="body${long ? " clip" : ""}">${esc(n.content)}</p>
+      <div class="row">
+        ${long ? '<button type="button" class="more-b">全文</button>' : ""}
+        <button type="button" class="task-b">選んでタスク化</button>
+        <button type="button" class="arch-b">アーカイブ</button>
+      </div>`;
+    card.querySelector(".more-b")?.addEventListener("click", (e) => {
+      card.querySelector(".body").classList.toggle("clip");
+      e.target.textContent = card.querySelector(".body").classList.contains("clip") ? "全文" : "たたむ";
+    });
+    // 行を選んでタスク化:メモの行一覧から1行選ぶ
+    card.querySelector(".task-b").addEventListener("click", () => {
+      const lines = n.content.split("\n").map((l) => l.replace(/^[-*・\s]+/, "").trim())
+        .filter((l) => l && l.length >= 2).slice(0, 30);
+      const picker = document.createElement("div");
+      picker.className = "line-picker";
+      picker.innerHTML = `<p class="muted">タスクにする行をタップ:</p>` +
+        lines.map((l, i) => `<button type="button" data-i="${i}">${esc(l.slice(0, 50))}</button>`).join("") +
+        `<button type="button" class="ghost cancel-b">やめる</button>`;
+      card.appendChild(picker);
+      picker.querySelector(".cancel-b").addEventListener("click", () => picker.remove());
+      picker.querySelectorAll("button[data-i]").forEach((b) => {
+        b.addEventListener("click", async () => {
+          await sb.from("tasks").insert({ name: lines[Number(b.dataset.i)].slice(0, 100), source: "inbox" });
+          await sb.from("inbox_notes").update({ state: "tasked" }).eq("id", n.id);
+          await refresh();
+        });
+      });
+    });
+    card.querySelector(".arch-b").addEventListener("click", async () => {
+      await sb.from("inbox_notes").update({ state: "archived" }).eq("id", n.id);
+      await loadInbox();
+    });
+    box.appendChild(card);
+  }
+}
+
 // ---------- タブ切り替え ----------
 document.querySelectorAll("#tabbar button").forEach((b) => {
   b.addEventListener("click", () => {
@@ -480,7 +548,7 @@ async function refresh() {
   renderToday();
   renderTasks();
   renderRoutines();
-  await Promise.all([loadDiary(), loadBucket()]);
+  await Promise.all([loadDiary(), loadBucket(), loadInbox()]);
 }
 
 // ---------- Service Worker ----------
