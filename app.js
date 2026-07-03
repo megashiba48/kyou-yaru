@@ -347,6 +347,114 @@ function renderDiaryList() {
   }
 }
 
+// ---------- タイムバケット ----------
+const HORIZONS = { "1y": "1年以内", "3y": "3年以内", "5y": "5年以内", "10y": "10年以内", "life": "死ぬまでに" };
+let bucketItems = [];
+let bucketFilter = "all";
+let myProfile = null;
+
+async function loadBucket() {
+  const [p, b] = await Promise.all([
+    sb.from("profile").select("*").maybeSingle(),
+    sb.from("bucket_items").select("*").order("created_at"),
+  ]);
+  myProfile = p.data;
+  bucketItems = b.data || [];
+  $("#life-setup").classList.toggle("hidden", !!myProfile?.birthdate);
+  $("#life-view").classList.toggle("hidden", !myProfile?.birthdate);
+  if (myProfile?.birthdate) drawLifeGrid();
+  renderBucketChips();
+  renderBucketList();
+}
+
+$("#birthdate-save").addEventListener("click", async () => {
+  const bd = $("#birthdate").value;
+  if (!bd) return;
+  const { data: { user } } = await sb.auth.getUser();
+  await sb.from("profile").upsert({ user_id: user.id, birthdate: bd }, { onConflict: "user_id" });
+  await loadBucket();
+});
+
+function drawLifeGrid() {
+  const lifeYears = myProfile.life_years || 85;
+  const born = new Date(myProfile.birthdate + "T00:00:00");
+  const now = new Date();
+  const weeksLived = Math.floor((now - born) / (7 * 86400000));
+  const totalWeeks = lifeYears * 52;
+  const age = Math.floor((now - born) / (365.25 * 86400000));
+  const weeksLeft = Math.max(0, totalWeeks - weeksLived);
+  $("#life-stats").innerHTML =
+    `いま <b>${age}歳</b>。${lifeYears}歳まで残り <b>${lifeYears - age}年(約${weeksLeft.toLocaleString()}週)</b>`;
+
+  const canvas = $("#life-grid");
+  const cols = 52, cell = 6, gap = 1; // 1行=1年
+  const W = cols * (cell + gap), H = lifeYears * (cell + gap);
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  for (let w = 0; w < totalWeeks; w++) {
+    const row = Math.floor(w / cols), col = w % cols;
+    ctx.fillStyle = w < weeksLived ? "#4f46e5" : "#e3e5ec";
+    ctx.fillRect(col * (cell + gap), row * (cell + gap), cell, cell);
+  }
+}
+
+function renderBucketChips() {
+  const box = $("#bucket-chips");
+  box.innerHTML = "";
+  const counts = {};
+  for (const b of bucketItems) counts[b.horizon] = (counts[b.horizon] || 0) + 1;
+  for (const [key, label] of [["all", "全部"], ...Object.entries(HORIZONS)]) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip" + (bucketFilter === key ? " on" : "");
+    chip.textContent = key === "all" ? `${label} ${bucketItems.length}` : `${label} ${counts[key] || 0}`;
+    chip.addEventListener("click", () => { bucketFilter = key; renderBucketChips(); renderBucketList(); });
+    box.appendChild(chip);
+  }
+}
+
+$("#bucket-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const content = $("#bucket-name").value.trim();
+  if (!content) return;
+  await sb.from("bucket_items").insert({ content, horizon: $("#bucket-horizon").value });
+  e.target.reset();
+  await loadBucket();
+});
+
+function renderBucketList() {
+  const ul = $("#bucket-list");
+  ul.innerHTML = "";
+  const items = bucketItems
+    .filter((b) => bucketFilter === "all" || b.horizon === bucketFilter)
+    .sort((a, b) => a.achieved - b.achieved);
+  if (!items.length) {
+    ul.innerHTML = `<p class="muted">まだありません。思いついたら書き殴ってOK。</p>`;
+    return;
+  }
+  for (const b of items) {
+    const li = document.createElement("li");
+    if (b.achieved) li.className = "done";
+    li.innerHTML = `<span class="name">${b.achieved ? "🏆 " : ""}${esc(b.content)}</span>
+      <span class="meta">${HORIZONS[b.horizon] || ""}</span>
+      <button class="ach-b">${b.achieved ? "戻す" : "達成!"}</button>
+      <button class="danger del-b">削除</button>`;
+    li.querySelector(".ach-b").addEventListener("click", async () => {
+      await sb.from("bucket_items").update({ achieved: !b.achieved }).eq("id", b.id);
+      await loadBucket();
+    });
+    li.querySelector(".del-b").addEventListener("click", async () => {
+      if (!confirm(`「${b.content}」を削除しますか?`)) return;
+      await sb.from("bucket_items").delete().eq("id", b.id);
+      await loadBucket();
+    });
+    ul.appendChild(li);
+  }
+}
+
 // ---------- タブ切り替え ----------
 document.querySelectorAll("#tabbar button").forEach((b) => {
   b.addEventListener("click", () => {
@@ -366,7 +474,7 @@ async function refresh() {
   renderToday();
   renderTasks();
   renderRoutines();
-  await loadDiary();
+  await Promise.all([loadDiary(), loadBucket()]);
 }
 
 // ---------- Service Worker ----------

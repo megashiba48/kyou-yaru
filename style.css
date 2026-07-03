@@ -84,6 +84,15 @@ textarea { width: 100%; font: inherit; padding: 10px 12px; border-radius: 10px;
 .diary-card p { margin: 4px 0; font-size: .9rem; white-space: pre-wrap; }
 .diary-card b { color: var(--muted); font-weight: 600; margin-right: 4px; }
 
+/* タイムバケット */
+#life-stats { font-size: .95rem; }
+#life-stats b { color: var(--indigo); }
+#life-grid { display: block; margin: 6px 0 2px; }
+.grid-note { margin-top: 2px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+.chip { font-size: .8rem; padding: 6px 10px; border-radius: 999px; background: #e8e9f0; }
+.chip.on { background: var(--indigo); color: #fff; font-weight: 700; }
+
 /* タブバー */
 #tabbar { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
   background: var(--card); border-top: 1px solid #e3e5ec;

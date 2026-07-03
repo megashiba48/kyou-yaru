@@ -89,10 +89,37 @@
       <p class="muted">Obsidianのアイデアメモがここに届きます(Phase 4で実装予定)。</p>
     </section>
 
-    <!-- バケットタブ(Phase 3) -->
+    <!-- バケットタブ -->
     <section id="tab-bucket" class="tab hidden">
       <h2>タイムバケット</h2>
-      <p class="muted">人生でやりたいことリスト(Phase 3で実装予定)。</p>
+      <div id="life-setup" class="hidden">
+        <p class="muted">生年月日を入れると「人生の残り時間」が見えるようになります。</p>
+        <div class="row">
+          <input id="birthdate" type="date">
+          <button id="birthdate-save" class="primary">設定</button>
+        </div>
+      </div>
+      <div id="life-view" class="hidden">
+        <p id="life-stats"></p>
+        <canvas id="life-grid"></canvas>
+        <p class="muted grid-note">1マス=1週間。塗りつぶし=過ぎた週。</p>
+      </div>
+      <p class="section-label">やりたいことを追加</p>
+      <form id="bucket-form">
+        <input id="bucket-name" placeholder="例:家族でハワイに行く" required>
+        <div class="row">
+          <select id="bucket-horizon">
+            <option value="1y">1年以内</option>
+            <option value="3y">3年以内</option>
+            <option value="5y">5年以内</option>
+            <option value="10y">10年以内</option>
+            <option value="life">死ぬまでに</option>
+          </select>
+          <button class="primary" type="submit">追加</button>
+        </div>
+      </form>
+      <div id="bucket-chips" class="chips"></div>
+      <ul id="bucket-list" class="list"></ul>
     </section>
 
     <!-- 日記タブ -->
