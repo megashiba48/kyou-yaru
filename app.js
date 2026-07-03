@@ -44,9 +44,34 @@ $("#auth-send").addEventListener("click", async () => {
     email,
     options: { emailRedirectTo: location.origin + location.pathname },
   });
-  $("#auth-msg").textContent = error
-    ? "送信できませんでした: " + error.message
-    : "メールを確認して、届いたリンクを開いてください(この端末で開くとログイン完了)";
+  if (error) {
+    $("#auth-msg").textContent = "送信できませんでした: " + error.message;
+    return;
+  }
+  $("#otp-area").classList.remove("hidden");
+  $("#auth-msg").textContent = "メールを送りました";
+});
+
+$("#auth-verify").addEventListener("click", async () => {
+  const raw = $("#auth-link").value.trim();
+  if (!raw) return;
+  let token_hash, type;
+  try {
+    const u = new URL(raw);
+    token_hash = u.searchParams.get("token") || u.searchParams.get("token_hash");
+    type = u.searchParams.get("type") || "magiclink";
+  } catch {
+    $("#auth-msg").textContent = "リンクの形が読めません。メールのリンクを丸ごとコピーして貼ってください";
+    return;
+  }
+  if (!token_hash) {
+    $("#auth-msg").textContent = "リンクにログイン情報が見つかりません";
+    return;
+  }
+  $("#auth-msg").textContent = "確認中…";
+  const { error } = await sb.auth.verifyOtp({ token_hash, type });
+  if (error) $("#auth-msg").textContent = "期限切れかもしれません。もう一度メールを送ってやり直してください(" + error.message + ")";
+  // 成功時は onAuthStateChange がアプリ画面へ切り替える
 });
 
 sb.auth.onAuthStateChange((_event, session) => {

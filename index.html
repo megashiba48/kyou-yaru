@@ -19,7 +19,13 @@
     <h1>今日やる</h1>
     <p class="muted">メールアドレスにログイン用リンクを送ります。<br>パスワードは不要です。</p>
     <input id="auth-email" type="email" placeholder="メールアドレス" autocomplete="email">
-    <button id="auth-send" class="primary">ログインリンクを送る</button>
+    <button id="auth-send" class="primary">ログインメールを送る</button>
+    <div id="otp-area" class="hidden">
+      <p class="muted how">📱 アプリの場合:メールの「Sign in」リンクを<b>長押し→リンクをコピー</b>して、下に貼り付け</p>
+      <input id="auth-link" type="text" placeholder="ここにリンクを貼り付け">
+      <button id="auth-verify" class="primary">ログイン</button>
+      <p class="muted how">💻 PCのブラウザなら、メールのリンクをそのまま開くだけでOK</p>
+    </div>
     <p id="auth-msg" class="muted"></p>
   </div>
 </div>
@@ -121,7 +127,7 @@
       </form>
       <div id="bucket-chips" class="chips"></div>
       <ul id="bucket-list" class="list"></ul>
-      <p class="muted">app v4.0</p>
+      <p class="muted">app v4.1</p>
     </section>
 
     <!-- 日記タブ -->
