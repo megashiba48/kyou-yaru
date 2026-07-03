@@ -74,9 +74,19 @@ $("#auth-verify").addEventListener("click", async () => {
   // 成功時は onAuthStateChange がアプリ画面へ切り替える
 });
 
+let signedIn = false;
 sb.auth.onAuthStateChange((_event, session) => {
+  signedIn = !!session;
   if (session) { show("app-view"); refresh(); }
   else show("auth-view");
+});
+
+// アプリが前面に戻ったら最新を読み直す(受信箱の新着などを反映)
+let lastRefresh = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && signedIn && Date.now() - lastRefresh > 20000) {
+    refresh();
+  }
 });
 
 // ---------- データ取得 ----------
@@ -593,6 +603,7 @@ function esc(s) {
 }
 
 async function refresh() {
+  lastRefresh = Date.now();
   await loadAll();
   renderToday();
   renderTasks();
