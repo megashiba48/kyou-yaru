@@ -87,10 +87,16 @@ textarea { width: 100%; font: inherit; padding: 10px 12px; border-radius: 10px;
 .diary-card b { color: var(--muted); font-weight: 600; margin-right: 4px; }
 
 /* タイムバケット */
-#life-stats { font-size: .95rem; }
-#life-stats b { color: var(--indigo); }
-#life-grid { display: block; margin: 6px 0 2px; }
-.grid-note { margin-top: 2px; }
+#life-stats { font-size: 1rem; }
+#life-stats .big { color: var(--indigo); font-size: 1.5rem; font-weight: 800; }
+#life-meter { height: 20px; border-radius: 999px; background: #e3e5ec; overflow: hidden; margin: 8px 0 4px; }
+#life-fill { height: 100%; background: linear-gradient(90deg, var(--indigo), #7c74f0); border-radius: 999px; }
+
+/* 実績 */
+.done-group { background: var(--card); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.done-date { font-weight: 700; font-size: .85rem; color: var(--indigo); margin-bottom: 4px; }
+.done-item { font-size: .9rem; padding: 2px 0; }
+.done-item .meta { color: var(--muted); font-size: .75rem; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
 .chip { font-size: .8rem; padding: 6px 10px; border-radius: 999px; background: #e8e9f0; }
 .chip.on { background: var(--indigo); color: #fff; font-weight: 700; }

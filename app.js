@@ -80,15 +80,16 @@ sb.auth.onAuthStateChange((_event, session) => {
 });
 
 // ---------- データ取得 ----------
-let state = { tasks: [], routines: [], logs: [] };
+let state = { tasks: [], routines: [], logs: [], done: [] };
 
 async function loadAll() {
-  const [t, r, l] = await Promise.all([
+  const [t, r, l, d] = await Promise.all([
     sb.from("tasks").select("*").eq("status", "open").order("created_at"),
     sb.from("routines").select("*").eq("active", true),
     sb.from("routine_log").select("*").eq("on_date", todayStr()),
+    sb.from("tasks").select("*").eq("status", "done").order("done_at", { ascending: false }).limit(300),
   ]);
-  state = { tasks: t.data || [], routines: r.data || [], logs: l.data || [] };
+  state = { tasks: t.data || [], routines: r.data || [], logs: l.data || [], done: d.data || [] };
 }
 
 // ---------- 「今日の候補」スコア ----------
@@ -257,6 +258,41 @@ function renderTasks() {
   }
 }
 
+// 実績(完了タスクの振り返り)
+function renderDone() {
+  const doneDate = (t) => {
+    const d = new Date(t.done_at);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const today = todayStr();
+  const weekAgo = new Date(Date.now() - 6 * 86400000);
+  const todayCount = state.done.filter((t) => doneDate(t) === today).length;
+  const weekCount = state.done.filter((t) => new Date(t.done_at) >= weekAgo).length;
+  $("#done-summary").textContent = state.done.length
+    ? `今日 ${todayCount}件 / 直近7日 ${weekCount}件 / 記録上 ${state.done.length}件`
+    : "まだありません。タスクを完了するとここに貯まります。";
+
+  const box = $("#done-list");
+  box.innerHTML = "";
+  const groups = new Map();
+  for (const t of state.done) {
+    const key = doneDate(t);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
+  }
+  for (const [date, items] of [...groups.entries()].slice(0, 30)) {
+    const d = new Date(date + "T00:00:00");
+    const div = document.createElement("div");
+    div.className = "done-group";
+    div.innerHTML = `<div class="done-date">${date === today ? "今日" : date.slice(5).replace("-", "/") + "(" + WEEKDAYS[d.getDay()] + ")"} — ${items.length}件</div>` +
+      items.map((t) => {
+        const hm = new Date(t.done_at);
+        return `<div class="done-item">✅ ${esc(t.name)} <span class="meta">${String(hm.getHours()).padStart(2, "0")}:${String(hm.getMinutes()).padStart(2, "0")}</span></div>`;
+      }).join("");
+    box.appendChild(div);
+  }
+}
+
 // ルーティン
 const daysBox = $("#routine-days");
 WEEKDAYS.forEach((w, idx) => {
@@ -352,19 +388,18 @@ function renderDiaryList() {
   const box = $("#diary-list");
   box.innerHTML = "";
   const hits = diaryEntries.filter((e) => {
-    if (e.on_date === todayStr() && !q) return false; // 今日の分は上のフォームにある
     if (!q) return true;
     return [e.events, e.feelings, e.conclusion].some((t) => t && t.includes(q));
-  }).slice(0, 30);
+  }).slice(0, 60);
   if (!hits.length) {
-    box.innerHTML = `<p class="muted">${q ? "見つかりませんでした" : "過去の日記はまだありません"}</p>`;
+    box.innerHTML = `<p class="muted">${q ? "見つかりませんでした" : "まだ日記がありません。今日の3問から始めましょう。"}</p>`;
     return;
   }
   for (const e of hits) {
     const d = new Date(e.on_date + "T00:00:00");
     const card = document.createElement("div");
     card.className = "diary-card";
-    card.innerHTML = `<div class="date">${e.on_date.replaceAll("-", "/")}(${WEEKDAYS[d.getDay()]})</div>
+    card.innerHTML = `<div class="date">${e.on_date.replaceAll("-", "/")}(${WEEKDAYS[d.getDay()]})${e.on_date === todayStr() ? "・今日" : ""}</div>
       ${e.events ? `<p><b>出来事:</b>${esc(e.events)}</p>` : ""}
       ${e.feelings ? `<p><b>気持ち:</b>${esc(e.feelings)}</p>` : ""}
       ${e.conclusion ? `<p><b>結論:</b>${esc(e.conclusion)}</p>` : ""}`;
@@ -414,22 +449,11 @@ function drawLifeGrid() {
   const totalWeeks = lifeYears * 52;
   const age = Math.floor((now - born) / (365.25 * 86400000));
   const weeksLeft = Math.max(0, totalWeeks - weeksLived);
+  const pct = Math.min(100, Math.round((weeksLived / totalWeeks) * 1000) / 10);
   $("#life-stats").innerHTML =
-    `いま <b>${age}歳</b>。${lifeYears}歳まで残り <b>${lifeYears - age}年(約${weeksLeft.toLocaleString()}週)</b>`;
-
-  const canvas = $("#life-grid");
-  const cols = 52, cell = 6, gap = 1; // 1行=1年
-  const W = cols * (cell + gap), H = lifeYears * (cell + gap);
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = W * dpr; canvas.height = H * dpr;
-  canvas.style.width = W + "px"; canvas.style.height = H + "px";
-  const ctx = canvas.getContext("2d");
-  ctx.scale(dpr, dpr);
-  for (let w = 0; w < totalWeeks; w++) {
-    const row = Math.floor(w / cols), col = w % cols;
-    ctx.fillStyle = w < weeksLived ? "#4f46e5" : "#e3e5ec";
-    ctx.fillRect(col * (cell + gap), row * (cell + gap), cell, cell);
-  }
+    `いま${age}歳 — 残り <b class="big">${lifeYears - age}年</b>(約${weeksLeft.toLocaleString()}週)`;
+  $("#life-fill").style.width = pct + "%";
+  $("#life-meter-label").textContent = `${lifeYears}歳までのゲージ:${pct}%経過・残り${Math.round((100 - pct) * 10) / 10}%`;
 }
 
 function renderBucketChips() {
@@ -573,6 +597,7 @@ async function refresh() {
   renderToday();
   renderTasks();
   renderRoutines();
+  renderDone();
   await Promise.all([loadDiary(), loadBucket(), loadInbox()]);
 }
 

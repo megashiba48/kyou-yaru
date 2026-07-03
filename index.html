@@ -87,6 +87,10 @@
         </div>
       </form>
       <ul id="routine-list" class="list"></ul>
+
+      <h2>実績(完了したタスク)</h2>
+      <p id="done-summary" class="muted"></p>
+      <div id="done-list"></div>
     </section>
 
     <!-- 受信箱タブ -->
@@ -108,8 +112,8 @@
       </div>
       <div id="life-view" class="hidden">
         <p id="life-stats"></p>
-        <canvas id="life-grid"></canvas>
-        <p class="muted grid-note">1マス=1週間。塗りつぶし=過ぎた週。</p>
+        <div id="life-meter"><div id="life-fill"></div></div>
+        <p id="life-meter-label" class="muted"></p>
       </div>
       <p class="section-label">やりたいことを追加</p>
       <form id="bucket-form">
@@ -127,7 +131,7 @@
       </form>
       <div id="bucket-chips" class="chips"></div>
       <ul id="bucket-list" class="list"></ul>
-      <p class="muted">app v4.1</p>
+      <p class="muted">app v4.2</p>
     </section>
 
     <!-- 日記タブ -->

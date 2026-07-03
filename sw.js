@@ -1,5 +1,5 @@
 // シンプルなキャッシュ(アプリの殻だけ。データは常にネット経由)
-const CACHE = "kyou-yaru-v6";
+const CACHE = "kyou-yaru-v7";
 
 self.addEventListener("message", (e) => {
   if (e.data === "skip") self.skipWaiting();
