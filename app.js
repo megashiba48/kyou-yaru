@@ -390,29 +390,100 @@ if (localStorage.getItem("pomoSound") === "off") $("#pomo-sound").textContent = 
 updatePomo();
 
 // ---------- タスクタブ ----------
+const DELEGATE_COLORS = { "近藤": "#0e9f6e", "榊原": "#d97706", "竹市": "#7c3aed" };
+let taskFilter20 = false;
+let taskCatFilter = "";
+
+$("#task-delegate-on").addEventListener("change", (e) => {
+  $("#task-delegate").classList.toggle("hidden", !e.target.checked);
+});
+document.querySelectorAll(".mins-chips button[data-min]").forEach((b) => {
+  b.addEventListener("click", () => {
+    $("#task-minutes").value = b.dataset.min;
+    document.querySelectorAll(".mins-chips button[data-min]").forEach((x) => x.classList.toggle("on", x === b));
+  });
+});
+$("#filter-20").addEventListener("click", () => {
+  taskFilter20 = !taskFilter20;
+  $("#filter-20").classList.toggle("on", taskFilter20);
+  renderTasks();
+});
+
 $("#task-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = $("#task-name").value.trim();
   if (!name) return;
+  const delegate = $("#task-delegate-on").checked ? $("#task-delegate").value : null;
   await sb.from("tasks").insert({
     name,
     priority: Number($("#task-priority").value),
     minutes: $("#task-minutes").value ? Number($("#task-minutes").value) : null,
     deadline: $("#task-deadline").value || null,
+    category: $("#task-category").value || null,
+    focus_needed: $("#task-focus").checked,
+    delegate,
   });
   e.target.reset();
+  $("#task-delegate").classList.add("hidden");
+  document.querySelectorAll(".mins-chips button[data-min]").forEach((x) => x.classList.remove("on"));
   await refresh();
 });
 
+// 時間帯レコメンド(今の時刻に合わせて出すだけ)
+function renderTimeReco() {
+  const box = $("#time-reco");
+  if (!box) return;
+  const h = new Date().getHours();
+  const focus = state.tasks.filter((t) => t.focus_needed);
+  const light = state.tasks.filter((t) => (t.minutes && t.minutes <= 20) || t.delegate);
+  let cls, msg, list;
+  if ((h >= 8 && h < 10) || h >= 22 || h < 2) {
+    cls = "reco reco-focus"; msg = "🌅 今は集中に良い時間。重い『集中タスク』をどうぞ。"; list = focus;
+  } else if (h >= 12 && h < 15) {
+    cls = "reco reco-light"; msg = "🥱 昼は一番しんどい時間。軽いタスク・委任タスクを。集中タスクは朝か夜に。"; list = light;
+  } else {
+    cls = "reco reco-neutral"; msg = "淡々とTOP3を進める時間帯。"; list = [];
+  }
+  box.className = cls;
+  box.innerHTML = `<div class="reco-msg">${msg}</div>` +
+    (list.length ? `<div class="reco-list">${list.slice(0, 5).map((t) => `<span>・${esc(t.name)}</span>`).join("")}</div>` : "");
+}
+
 function renderTasks() {
+  renderTimeReco();
+  // カテゴリ絞り込みチップ
+  const cats = [...new Set(state.tasks.map((t) => t.category).filter(Boolean))];
+  const cf = $("#cat-filter");
+  cf.innerHTML = "";
+  for (const c of cats) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (taskCatFilter === c ? " on" : "");
+    b.textContent = c;
+    b.addEventListener("click", () => { taskCatFilter = taskCatFilter === c ? "" : c; renderTasks(); });
+    cf.appendChild(b);
+  }
+
   const ul = $("#task-list");
   ul.innerHTML = "";
   const pr = { 1: "高", 2: "中", 3: "低" };
-  for (const t of state.tasks) {
+  let list = state.tasks;
+  if (taskFilter20) list = list.filter((t) => t.minutes && t.minutes <= 20);
+  if (taskCatFilter) list = list.filter((t) => t.category === taskCatFilter);
+  for (const t of list) {
     const li = document.createElement("li");
-    li.innerHTML = `<span class="name">${esc(t.name)}</span>
+    if (t.delegate) { li.classList.add("delegated"); li.style.setProperty("--tag", DELEGATE_COLORS[t.delegate] || "#888"); }
+    if (t.category === "嫌い") li.classList.add("hate");
+    const badges = [
+      t.category ? `<span class="badge cat">${esc(t.category)}</span>` : "",
+      t.delegate ? `<span class="badge dg">🤝${esc(t.delegate)}</span>` : "",
+      t.focus_needed ? `<span class="badge fc">🎯</span>` : "",
+    ].join("");
+    li.innerHTML = `<span class="name">${esc(t.name)} ${badges}</span>
       <span class="meta">${pr[t.priority]}${t.minutes ? "・" + t.minutes + "分" : ""}${t.deadline ? "・〆" + t.deadline.slice(5).replace("-", "/") : ""}${t.postpone_count ? "・見送り" + t.postpone_count : ""}</span>
+      ${t.category === "嫌い" ? '<button class="hate-b">30分</button>' : ""}
       <button class="done-b">完了</button><button class="danger del-b">削除</button>`;
+    if (t.category === "嫌い") li.querySelector(".hate-b").addEventListener("click", () => startFocus30(t.name));
     li.querySelector(".done-b").addEventListener("click", async () => {
       await sb.from("tasks").update({ status: "done", done_at: new Date().toISOString() }).eq("id", t.id);
       await refresh();
@@ -424,6 +495,30 @@ function renderTasks() {
     });
     ul.appendChild(li);
   }
+}
+
+// 嫌いなことを30分だけ集中して片付けるタイマー
+let f30 = { endsAt: 0, name: "", timer: null };
+function startFocus30(name) {
+  f30.endsAt = Date.now() + 30 * 60 * 1000;
+  f30.name = name;
+  clearInterval(f30.timer);
+  f30.timer = setInterval(renderFocus30, 1000);
+  renderFocus30();
+}
+function renderFocus30() {
+  const box = $("#focus30");
+  if (!box) return;
+  if (!f30.endsAt) { box.innerHTML = ""; return; }
+  const left = Math.max(0, Math.round((f30.endsAt - Date.now()) / 1000));
+  if (left <= 0) {
+    clearInterval(f30.timer); beep();
+    box.innerHTML = `<div class="f30 done">✅ 30分完了:${esc(f30.name)}<button class="x-b">閉じる</button></div>`;
+    box.querySelector(".x-b").onclick = () => { f30.endsAt = 0; renderFocus30(); };
+    return;
+  }
+  box.innerHTML = `<div class="f30"><span>😤 30分だけ集中:${esc(f30.name)}</span><span class="t">${fmtSec(left)}</span><button class="x-b">やめる</button></div>`;
+  box.querySelector(".x-b").onclick = () => { f30.endsAt = 0; clearInterval(f30.timer); renderFocus30(); };
 }
 
 // 実績(完了タスクの振り返り)

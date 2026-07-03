@@ -123,6 +123,38 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 .inbox-card .idea { font-size: .95rem; margin: 0 0 10px; white-space: pre-wrap; }
 .inbox-card .row button { font-size: .85rem; padding: 8px 12px; }
 
+/* タスク強化(Phase B) */
+.mins-chips { align-items: center; gap: 6px; }
+.mins-chips button[data-min] { padding: 6px 10px; font-size: .8rem; background: #e8e9f0; }
+.mins-chips button[data-min].on { background: var(--indigo); color: #fff; font-weight: 700; }
+.chk { font-size: .85rem; display: inline-flex; align-items: center; gap: 4px; }
+.filter-chips { align-items: center; gap: 6px; margin: 10px 0; flex-wrap: wrap; }
+#filter-20 { }
+#filter-20.on { background: var(--indigo); color: #fff; font-weight: 700; }
+.badge { font-size: .68rem; padding: 2px 6px; border-radius: 6px; margin-left: 2px; white-space: nowrap; }
+.badge.cat { background: #e5e7f5; color: #4046a0; }
+.badge.dg { background: #e6f5ee; color: #0e7a52; }
+.badge.fc { background: #fdeede; color: #b45309; }
+.list li.delegated { border-left: 4px solid var(--tag, #888); }
+.list li.hate { background: #fdf0f0; }
+.list li .hate-b { background: #fee2e2; color: var(--danger); font-weight: 700; }
+
+/* 時間帯レコメンド */
+.reco { border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
+.reco-focus { background: #eef2ff; }
+.reco-light { background: #fff7ed; }
+.reco-neutral { background: #f2f3f7; }
+.reco-msg { font-size: .9rem; font-weight: 600; }
+.reco-list { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; font-size: .82rem; color: var(--muted); }
+
+/* 30分集中タイマー */
+.f30 { background: var(--indigo); color: #fff; border-radius: 12px; padding: 12px 14px; margin: 8px 0;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; box-shadow: 0 4px 14px rgba(79,70,229,.3); }
+.f30 .t { font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.f30 .x-b { background: rgba(255,255,255,.22); color: #fff; padding: 6px 10px; font-size: .8rem; }
+.f30.done { background: #0e9f6e; }
+.f30.done .x-b { margin-left: 8px; }
+
 /* タブバー */
 #tabbar { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
   background: var(--card); border-top: 1px solid #e3e5ec;
