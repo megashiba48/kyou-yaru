@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>今日やる</title>
+<meta name="theme-color" content="#4f46e5">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ログイン画面 -->
+<div id="auth-view" class="view hidden">
+  <div class="auth-box">
+    <h1>今日やる</h1>
+    <p class="muted">メールアドレスにログイン用リンクを送ります。<br>パスワードは不要です。</p>
+    <input id="auth-email" type="email" placeholder="メールアドレス" autocomplete="email">
+    <button id="auth-send" class="primary">ログインリンクを送る</button>
+    <p id="auth-msg" class="muted"></p>
+  </div>
+</div>
+
+<!-- 設定不足画面 -->
+<div id="setup-view" class="view hidden">
+  <div class="auth-box">
+    <h1>初期設定が必要です</h1>
+    <p class="muted">config.js に Supabase の URL と anon key が入っていません。<br>
+    「01_セットアップ手順.md」を見て設定してください。</p>
+  </div>
+</div>
+
+<!-- アプリ本体 -->
+<div id="app-view" class="view hidden">
+
+  <main id="main">
+    <!-- 今日タブ -->
+    <section id="tab-today" class="tab">
+      <h2 id="today-date"></h2>
+      <div id="pick3-area">
+        <p class="section-label">今日の候補3つ — どれからやる?</p>
+        <div id="pick3"></div>
+      </div>
+      <div id="focus-area" class="hidden">
+        <p class="section-label">いまやる</p>
+        <div id="focus-card"></div>
+      </div>
+      <p class="section-label">今日の残り</p>
+      <ul id="today-rest" class="list"></ul>
+      <p id="today-empty" class="muted hidden">全部終わってます。おつかれさま 🎉</p>
+    </section>
+
+    <!-- タスクタブ -->
+    <section id="tab-tasks" class="tab hidden">
+      <h2>タスク</h2>
+      <form id="task-form">
+        <input id="task-name" placeholder="タスクを追加(例:発送準備)" required>
+        <div class="row">
+          <select id="task-priority">
+            <option value="1">優先度:高</option>
+            <option value="2" selected>優先度:中</option>
+            <option value="3">優先度:低</option>
+          </select>
+          <input id="task-minutes" type="number" min="1" placeholder="所要(分)">
+          <input id="task-deadline" type="date" title="締切">
+          <button class="primary" type="submit">追加</button>
+        </div>
+      </form>
+      <ul id="task-list" class="list"></ul>
+
+      <h2>ルーティン(毎日やること)</h2>
+      <form id="routine-form">
+        <input id="routine-name" placeholder="ルーティンを追加(例:ガチャ公開前チェック)" required>
+        <div class="row">
+          <div id="routine-days" class="days"></div>
+          <input id="routine-minutes" type="number" min="1" placeholder="分">
+          <button class="primary" type="submit">追加</button>
+        </div>
+      </form>
+      <ul id="routine-list" class="list"></ul>
+    </section>
+
+    <!-- 受信箱タブ(Phase 4) -->
+    <section id="tab-inbox" class="tab hidden">
+      <h2>受信箱</h2>
+      <p class="muted">Obsidianのアイデアメモがここに届きます(Phase 4で実装予定)。</p>
+    </section>
+
+    <!-- バケットタブ(Phase 3) -->
+    <section id="tab-bucket" class="tab hidden">
+      <h2>タイムバケット</h2>
+      <p class="muted">人生でやりたいことリスト(Phase 3で実装予定)。</p>
+    </section>
+
+    <!-- 日記タブ(Phase 2) -->
+    <section id="tab-diary" class="tab hidden">
+      <h2>日記</h2>
+      <p class="muted">3つの質問で1日を記録(Phase 2で実装予定)。</p>
+    </section>
+  </main>
+
+  <nav id="tabbar">
+    <button data-tab="today" class="active">📌<span>今日</span></button>
+    <button data-tab="tasks">✅<span>タスク</span></button>
+    <button data-tab="inbox">📥<span>受信箱</span></button>
+    <button data-tab="bucket">🪣<span>バケット</span></button>
+    <button data-tab="diary">📓<span>日記</span></button>
+  </nav>
+</div>
+
+<script src="config.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
