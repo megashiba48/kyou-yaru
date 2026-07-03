@@ -1,5 +1,9 @@
 // シンプルなキャッシュ(アプリの殻だけ。データは常にネット経由)
-const CACHE = "kyou-yaru-v3";
+const CACHE = "kyou-yaru-v4";
+
+self.addEventListener("message", (e) => {
+  if (e.data === "skip") self.skipWaiting();
+});
 const SHELL = ["./", "index.html", "style.css", "app.js", "config.js", "manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {

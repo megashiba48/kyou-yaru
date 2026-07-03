@@ -354,17 +354,23 @@ let bucketFilter = "all";
 let myProfile = null;
 
 async function loadBucket() {
-  const [p, b] = await Promise.all([
-    sb.from("profile").select("*").maybeSingle(),
-    sb.from("bucket_items").select("*").order("created_at"),
-  ]);
-  myProfile = p.data;
-  bucketItems = b.data || [];
-  $("#life-setup").classList.toggle("hidden", !!myProfile?.birthdate);
-  $("#life-view").classList.toggle("hidden", !myProfile?.birthdate);
-  if (myProfile?.birthdate) drawLifeGrid();
-  renderBucketChips();
-  renderBucketList();
+  try {
+    const [p, b] = await Promise.all([
+      sb.from("profile").select("*").maybeSingle(),
+      sb.from("bucket_items").select("*").order("created_at"),
+    ]);
+    if (p.error) throw new Error("profile: " + p.error.message);
+    if (b.error) throw new Error("bucket_items: " + b.error.message);
+    myProfile = p.data;
+    bucketItems = b.data || [];
+    $("#life-setup").classList.toggle("hidden", !!myProfile?.birthdate);
+    $("#life-view").classList.toggle("hidden", !myProfile?.birthdate);
+    if (myProfile?.birthdate) drawLifeGrid();
+    renderBucketChips();
+    renderBucketList();
+  } catch (err) {
+    $("#bucket-list").innerHTML = `<p class="muted">⚠読み込みエラー: ${esc(err.message)}</p>`;
+  }
 }
 
 $("#birthdate-save").addEventListener("click", async () => {
