@@ -93,13 +93,17 @@ document.addEventListener("visibilitychange", () => {
 let state = { tasks: [], routines: [], logs: [], done: [] };
 
 async function loadAll() {
-  const [t, r, l, d] = await Promise.all([
+  const since14 = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+  const [t, r, l, d, f, g] = await Promise.all([
     sb.from("tasks").select("*").eq("status", "open").order("created_at"),
     sb.from("routines").select("*").eq("active", true),
     sb.from("routine_log").select("*").eq("on_date", todayStr()),
-    sb.from("tasks").select("*").eq("status", "done").order("done_at", { ascending: false }).limit(300),
+    sb.from("tasks").select("*").eq("status", "done").order("done_at", { ascending: false }).limit(1000),
+    sb.from("focus_log").select("on_date").gte("on_date", since14),
+    sb.from("goals").select("*").order("created_at"),
   ]);
-  state = { tasks: t.data || [], routines: r.data || [], logs: l.data || [], done: d.data || [] };
+  state = { tasks: t.data || [], routines: r.data || [], logs: l.data || [], done: d.data || [],
+    focus: f.data || [], goals: g.data || [] };
 }
 
 // ---------- 「今日の候補」スコア ----------
@@ -355,7 +359,7 @@ function beep() {
 
 function pomoAdvance(natural) {
   const wasWork = pomo.phase === "work";
-  if (natural) { if (wasWork) pomoInc(); beep(); }
+  if (natural) { if (wasWork) { pomoInc(); logFocusSet(); } beep(); }
   pomo.phase = wasWork ? "break" : "work";
   pomo.remaining = pomo.phase === "work" ? WORK_SEC : BREAK_SEC;
   pomo.endsAt = Date.now() + pomo.remaining * 1000; // 自動で次フェーズへ
@@ -748,6 +752,117 @@ function renderInbox() {
   }
 }
 
+// ---------- 実績タブ ----------
+function logFocusSet() {
+  sb.auth.getUser().then(({ data }) => {
+    if (data?.user) sb.from("focus_log").insert({ user_id: data.user.id, on_date: todayStr(), task_id: nowOneId || null });
+  });
+}
+
+const dstr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function weekStartStr() {
+  const d = new Date();
+  const day = (d.getDay() + 6) % 7; // 月曜=0
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - day);
+  return dstr(d);
+}
+
+function renderResults() {
+  renderAtBat();
+  renderActivity14();
+  renderGlory();
+  renderGoals();
+  renderDone();
+}
+
+function renderAtBat() {
+  const ws = weekStartStr();
+  const days = new Set();
+  for (const t of state.done) if (t.done_at && t.done_at.slice(0, 10) >= ws) days.add(t.done_at.slice(0, 10));
+  for (const f of (state.focus || [])) if (f.on_date >= ws) days.add(f.on_date);
+  $("#atbat").innerHTML = `<div class="atbat-card">
+    <div class="ab-label">今週の打席数</div>
+    <div class="ab-num">${days.size}<span>打席</span></div>
+    <div class="ab-note muted">1日1つでも完了 or ポモ1セットで打席+1。途切れてもリセットしません。</div>
+  </div>`;
+}
+
+function renderActivity14() {
+  const counts = {};
+  for (const t of state.done) if (t.done_at) { const ds = t.done_at.slice(0, 10); counts[ds] = (counts[ds] || 0) + 1; }
+  for (const f of (state.focus || [])) counts[f.on_date] = (counts[f.on_date] || 0) + 1;
+  const days = [];
+  let max = 1;
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000);
+    const c = counts[dstr(d)] || 0;
+    max = Math.max(max, c);
+    days.push({ d, c });
+  }
+  $("#activity14").innerHTML = `<div class="bars">` + days.map((x) => {
+    const h = Math.round((x.c / max) * 100);
+    return `<div class="bar-col"><div class="bar${x.c ? "" : " zero"}" style="height:${x.c ? Math.max(10, h) : 4}%"></div><div class="bar-d">${x.d.getDate()}</div></div>`;
+  }).join("") + `</div>`;
+}
+
+function renderGlory() {
+  const tally = {};
+  for (const t of state.done) { const c = t.category || "その他"; tally[c] = (tally[c] || 0) + 1; }
+  const entries = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+  const box = $("#glory");
+  if (!entries.length) { box.innerHTML = `<p class="muted">完了タスクが貯まると、カテゴリ別にここへ積み上がります。</p>`; return; }
+  const top = entries[0][1];
+  box.innerHTML = entries.map(([c, n]) =>
+    `<div class="glory-row"><span class="g-cat">${esc(c)}</span><span class="g-bar-wrap"><span class="g-bar" style="width:${Math.round((n / top) * 100)}%"></span></span><span class="g-num">${n}</span></div>`
+  ).join("");
+}
+
+$("#goal-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const title = $("#goal-title").value.trim();
+  if (!title) return;
+  const threshold = Math.min(100, Math.max(1, Number($("#goal-threshold").value) || 75));
+  await sb.from("goals").insert({ title, threshold, progress: 0 });
+  e.target.reset();
+  $("#goal-threshold").value = 75;
+  await refresh();
+});
+
+function renderGoals() {
+  const box = $("#goal-list");
+  box.innerHTML = "";
+  if (!state.goals.length) { box.innerHTML = `<p class="muted">目標はまだありません。75%で成功、完璧じゃなくていい。</p>`; return; }
+  for (const g of state.goals) {
+    const ok = g.progress >= g.threshold;
+    const div = document.createElement("div");
+    div.className = "goal" + (ok ? " ok" : "");
+    div.innerHTML = `
+      <div class="goal-top"><span class="goal-title">${ok ? "✅ " : ""}${esc(g.title)}</span><span class="goal-pct">${g.progress}%</span></div>
+      <div class="goal-bar"><div class="goal-fill" style="width:${Math.min(100, g.progress)}%"></div><div class="goal-line" style="left:${g.threshold}%"></div></div>
+      <div class="row goal-ctl">
+        <input type="range" min="0" max="100" value="${g.progress}" class="gr">
+        <button class="save-b ghost">保存</button>
+        <button class="del-b danger">削除</button>
+      </div>`;
+    const range = div.querySelector(".gr");
+    range.addEventListener("input", () => {
+      div.querySelector(".goal-pct").textContent = range.value + "%";
+      div.querySelector(".goal-fill").style.width = Math.min(100, range.value) + "%";
+    });
+    div.querySelector(".save-b").addEventListener("click", async () => {
+      await sb.from("goals").update({ progress: Number(range.value) }).eq("id", g.id);
+      await refresh();
+    });
+    div.querySelector(".del-b").addEventListener("click", async () => {
+      if (!confirm(`目標「${g.title}」を削除しますか?`)) return;
+      await sb.from("goals").delete().eq("id", g.id);
+      await refresh();
+    });
+    box.appendChild(div);
+  }
+}
+
 // ---------- タブ切り替え ----------
 document.querySelectorAll("#tabbar button").forEach((b) => {
   b.addEventListener("click", () => {
@@ -768,7 +883,7 @@ async function refresh() {
   renderToday();
   renderTasks();
   renderRoutines();
-  renderDone();
+  renderResults();
   await Promise.all([loadBucket(), loadInbox()]);
 }
 

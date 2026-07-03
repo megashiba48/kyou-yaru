@@ -155,6 +155,40 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 .f30.done { background: #0e9f6e; }
 .f30.done .x-b { margin-left: 8px; }
 
+/* 実績タブ(Phase C) */
+.atbat-card { background: var(--indigo); color: #fff; border-radius: var(--radius); padding: 16px;
+  text-align: center; box-shadow: 0 4px 14px rgba(79,70,229,.3); }
+.ab-label { font-size: .85rem; opacity: .9; }
+.ab-num { font-size: 3rem; font-weight: 800; line-height: 1.1; }
+.ab-num span { font-size: 1rem; font-weight: 600; margin-left: 4px; }
+.ab-note { color: rgba(255,255,255,.85) !important; font-size: .72rem; }
+
+.bars { display: flex; align-items: flex-end; gap: 3px; height: 90px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.bar { width: 100%; background: var(--indigo); border-radius: 3px 3px 0 0; }
+.bar.zero { background: #e3e5ec; }
+.bar-d { font-size: .6rem; color: var(--muted); margin-top: 2px; }
+
+.glory-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: .88rem; }
+.g-cat { width: 76px; flex-shrink: 0; }
+.g-bar-wrap { flex: 1; background: #eceef4; border-radius: 999px; height: 12px; overflow: hidden; }
+.g-bar { display: block; height: 100%; background: linear-gradient(90deg, var(--indigo), #7c74f0); }
+.g-num { width: 28px; text-align: right; font-weight: 700; color: var(--indigo); }
+
+#goal-form { align-items: center; gap: 6px; margin-bottom: 10px; }
+#goal-form #goal-title { flex: 1; }
+.goal { background: var(--card); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+.goal.ok { background: #ecfdf3; }
+.goal-top { display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 6px; }
+.goal-pct { color: var(--indigo); }
+.goal-bar { position: relative; height: 14px; background: #eceef4; border-radius: 999px; overflow: hidden; }
+.goal-fill { height: 100%; background: linear-gradient(90deg, var(--indigo), #7c74f0); }
+.goal.ok .goal-fill { background: var(--ok); }
+.goal-line { position: absolute; top: -2px; width: 2px; height: 18px; background: var(--ok); }
+.goal-ctl { align-items: center; gap: 8px; margin-top: 8px; }
+.goal-ctl .gr { flex: 1; }
+.goal-ctl button { padding: 6px 10px; font-size: .8rem; }
+
 /* タブバー */
 #tabbar { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
   background: var(--card); border-top: 1px solid #e3e5ec;
