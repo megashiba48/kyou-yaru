@@ -870,17 +870,27 @@ $("#bd-tasks").addEventListener("click", () => {
   const lines = $("#braindump").value.split("\n").map((l) => l.trim()).filter((l) => l.length >= 2);
   const box = $("#bd-picker");
   if (!lines.length) { box.innerHTML = `<p class="muted">先にアイデアを書いてください。</p>`; return; }
-  box.innerHTML = `<p class="muted">タスクにする行をタップ(タスク化した行はダンプから消えます):</p>` +
-    lines.map((l, i) => `<button type="button" data-i="${i}">${esc(l)}</button>`).join("");
-  box.querySelectorAll("button[data-i]").forEach((b) => {
-    b.addEventListener("click", async () => {
-      const line = lines[Number(b.dataset.i)];
-      await sb.from("tasks").insert({ name: line.slice(0, 100), source: "braindump" });
-      const remaining = $("#braindump").value.split("\n").filter((l) => l.trim() !== line);
-      $("#braindump").value = remaining.join("\n");
-      localStorage.setItem("braindump", $("#braindump").value);
-      b.remove();
-      await refresh();
+  box.innerHTML = `<p class="muted">各行の優先度をタップするとタスク化(その行はダンプから消えます):</p>` +
+    lines.map((l, i) => `
+      <div class="bd-row" data-i="${i}">
+        <span class="bd-text">${esc(l)}</span>
+        <span class="bd-pri">
+          <button type="button" class="pri-b p1" data-p="1">高</button>
+          <button type="button" class="pri-b p2" data-p="2">中</button>
+          <button type="button" class="pri-b p3" data-p="3">低</button>
+        </span>
+      </div>`).join("");
+  box.querySelectorAll(".bd-row").forEach((row) => {
+    const line = lines[Number(row.dataset.i)];
+    row.querySelectorAll(".pri-b").forEach((b) => {
+      b.addEventListener("click", async () => {
+        await sb.from("tasks").insert({ name: line.slice(0, 100), priority: Number(b.dataset.p), source: "braindump" });
+        const remaining = $("#braindump").value.split("\n").filter((l) => l.trim() !== line);
+        $("#braindump").value = remaining.join("\n");
+        localStorage.setItem("braindump", $("#braindump").value);
+        row.remove();
+        await refresh();
+      });
     });
   });
 });
