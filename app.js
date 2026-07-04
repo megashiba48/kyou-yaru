@@ -485,10 +485,12 @@ function renderTasks() {
       t.delegate ? `<span class="badge dg">🤝${esc(t.delegate)}</span>` : "",
       t.focus_needed ? `<span class="badge fc">🎯</span>` : "",
     ].join("");
-    li.innerHTML = `<span class="name">${esc(t.name)} ${badges}</span>
+    li.innerHTML = `<span class="name editable">${esc(t.name)} ${badges}</span>
       <span class="meta">${pr[t.priority]}${t.minutes ? "・" + t.minutes + "分" : ""}${t.deadline ? "・〆" + t.deadline.slice(5).replace("-", "/") : ""}${t.postpone_count ? "・見送り" + t.postpone_count : ""}</span>
       ${t.category === "嫌い" ? '<button class="hate-b">30分</button>' : ""}
-      <button class="done-b">完了</button><button class="danger del-b">削除</button>`;
+      <button class="edit-b">編集</button><button class="done-b">完了</button><button class="danger del-b">削除</button>`;
+    li.querySelector(".name").addEventListener("click", () => openTaskEditor({ task: t }));
+    li.querySelector(".edit-b").addEventListener("click", () => openTaskEditor({ task: t }));
     if (t.category === "嫌い") li.querySelector(".hate-b").addEventListener("click", () => startFocus30(t.name));
     li.querySelector(".done-b").addEventListener("click", async () => {
       await sb.from("tasks").update({ status: "done", done_at: new Date().toISOString() }).eq("id", t.id);
@@ -739,10 +741,12 @@ function renderInbox() {
         <button type="button" class="task-b primary">タスクにする</button>
         <button type="button" class="arch-b">アーカイブ</button>
       </div>`;
-    card.querySelector(".task-b").addEventListener("click", async () => {
-      await sb.from("tasks").insert({ name: n.content.slice(0, 100), source: "inbox" });
-      await sb.from("inbox_notes").update({ state: "tasked" }).eq("id", n.id);
-      await refresh();
+    card.querySelector(".task-b").addEventListener("click", () => {
+      openTaskEditor({
+        name: n.content.slice(0, 100),
+        source: "inbox",
+        onSaved: async () => { await sb.from("inbox_notes").update({ state: "tasked" }).eq("id", n.id); },
+      });
     });
     card.querySelector(".arch-b").addEventListener("click", async () => {
       await sb.from("inbox_notes").update({ state: "archived" }).eq("id", n.id);
@@ -863,6 +867,64 @@ function renderGoals() {
   }
 }
 
+// ---------- タスク編集モーダル(新規タスク化・後から編集の共通画面) ----------
+let teCtx = null; // { task?, source?, onSaved? }
+function openTaskEditor(opts = {}) {
+  teCtx = opts;
+  const t = opts.task || {};
+  $("#te-title").textContent = opts.task ? "タスクを編集" : "タスクにする";
+  $("#te-name").value = opts.name ?? t.name ?? "";
+  $("#te-priority").value = String(t.priority || 2);
+  $("#te-category").value = t.category || "";
+  $("#te-deadline").value = t.deadline || "";
+  $("#te-minutes").value = t.minutes || "";
+  $("#te-focus").checked = !!t.focus_needed;
+  const dg = t.delegate || "";
+  $("#te-delegate-on").checked = !!dg;
+  $("#te-delegate").classList.toggle("hidden", !dg);
+  if (dg) $("#te-delegate").value = dg;
+  $("#te-delete").classList.toggle("hidden", !opts.task);
+  $("#task-editor").classList.remove("hidden");
+  $("#te-name").focus();
+}
+function closeTaskEditor() { $("#task-editor").classList.add("hidden"); teCtx = null; }
+
+$("#te-delegate-on").addEventListener("change", (e) => $("#te-delegate").classList.toggle("hidden", !e.target.checked));
+$("#task-editor").querySelectorAll(".te-mins button[data-min]").forEach((b) => {
+  b.addEventListener("click", () => { $("#te-minutes").value = b.dataset.min; });
+});
+$("#te-cancel").addEventListener("click", closeTaskEditor);
+$("#task-editor").addEventListener("click", (e) => { if (e.target.id === "task-editor") closeTaskEditor(); });
+$("#te-save").addEventListener("click", async () => {
+  if (!teCtx) return;
+  const name = $("#te-name").value.trim();
+  if (!name) { $("#te-name").focus(); return; }
+  const fields = {
+    name,
+    priority: Number($("#te-priority").value),
+    category: $("#te-category").value || null,
+    deadline: $("#te-deadline").value || null,
+    minutes: $("#te-minutes").value ? Number($("#te-minutes").value) : null,
+    focus_needed: $("#te-focus").checked,
+    delegate: $("#te-delegate-on").checked ? $("#te-delegate").value : null,
+  };
+  if (teCtx.task) {
+    await sb.from("tasks").update(fields).eq("id", teCtx.task.id);
+  } else {
+    await sb.from("tasks").insert({ ...fields, source: teCtx.source || "braindump" });
+    if (teCtx.onSaved) await teCtx.onSaved();
+  }
+  closeTaskEditor();
+  await refresh();
+});
+$("#te-delete").addEventListener("click", async () => {
+  if (!teCtx || !teCtx.task) return;
+  if (!confirm(`「${teCtx.task.name}」を削除しますか?`)) return;
+  await sb.from("tasks").update({ status: "dropped" }).eq("id", teCtx.task.id);
+  closeTaskEditor();
+  await refresh();
+});
+
 // ---------- アイデア:ブレインダンプ ----------
 $("#braindump").value = localStorage.getItem("braindump") || "";
 $("#braindump").addEventListener("input", () => localStorage.setItem("braindump", $("#braindump").value));
@@ -870,26 +932,20 @@ $("#bd-tasks").addEventListener("click", () => {
   const lines = $("#braindump").value.split("\n").map((l) => l.trim()).filter((l) => l.length >= 2);
   const box = $("#bd-picker");
   if (!lines.length) { box.innerHTML = `<p class="muted">先にアイデアを書いてください。</p>`; return; }
-  box.innerHTML = `<p class="muted">各行の優先度をタップするとタスク化(その行はダンプから消えます):</p>` +
-    lines.map((l, i) => `
-      <div class="bd-row" data-i="${i}">
-        <span class="bd-text">${esc(l)}</span>
-        <span class="bd-pri">
-          <button type="button" class="pri-b p1" data-p="1">高</button>
-          <button type="button" class="pri-b p2" data-p="2">中</button>
-          <button type="button" class="pri-b p3" data-p="3">低</button>
-        </span>
-      </div>`).join("");
-  box.querySelectorAll(".bd-row").forEach((row) => {
-    const line = lines[Number(row.dataset.i)];
-    row.querySelectorAll(".pri-b").forEach((b) => {
-      b.addEventListener("click", async () => {
-        await sb.from("tasks").insert({ name: line.slice(0, 100), priority: Number(b.dataset.p), source: "braindump" });
-        const remaining = $("#braindump").value.split("\n").filter((l) => l.trim() !== line);
-        $("#braindump").value = remaining.join("\n");
-        localStorage.setItem("braindump", $("#braindump").value);
-        row.remove();
-        await refresh();
+  box.innerHTML = `<p class="muted">行をタップ→優先度・いつやる等を決めてタスク化(タスク化した行はダンプから消えます):</p>` +
+    lines.map((l, i) => `<button type="button" class="bd-line" data-i="${i}">${esc(l)}</button>`).join("");
+  box.querySelectorAll(".bd-line").forEach((b) => {
+    b.addEventListener("click", () => {
+      const line = lines[Number(b.dataset.i)];
+      openTaskEditor({
+        name: line.slice(0, 100),
+        source: "braindump",
+        onSaved: async () => {
+          const remaining = $("#braindump").value.split("\n").filter((l) => l.trim() !== line);
+          $("#braindump").value = remaining.join("\n");
+          localStorage.setItem("braindump", $("#braindump").value);
+          b.remove();
+        },
       });
     });
   });

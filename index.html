@@ -235,7 +235,7 @@
       </form>
       <div id="bucket-chips" class="chips"></div>
       <ul id="bucket-list" class="list"></ul>
-      <p class="muted">app v5.0</p>
+      <p class="muted">app v5.1</p>
     </section>
   </main>
 
@@ -247,6 +247,56 @@
     <button data-tab="results">🏆<span>実績</span></button>
     <button data-tab="bucket">🪣<span>バケット</span></button>
   </nav>
+</div>
+
+<!-- タスク編集モーダル(新規タスク化・後から編集の共通画面) -->
+<div id="task-editor" class="modal hidden">
+  <div class="modal-card">
+    <h3 id="te-title">タスクを編集</h3>
+    <input id="te-name" placeholder="タスク名" required>
+    <div class="row">
+      <select id="te-priority">
+        <option value="1">優先度:高</option>
+        <option value="2" selected>優先度:中</option>
+        <option value="3">優先度:低</option>
+      </select>
+      <select id="te-category">
+        <option value="">カテゴリなし</option>
+        <option value="営業">営業</option>
+        <option value="採用">採用</option>
+        <option value="配信準備">配信準備</option>
+        <option value="事務">事務</option>
+        <option value="連絡">連絡</option>
+        <option value="嫌い">嫌い(やりたくない)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label class="date-label">いつやる<input id="te-deadline" type="date"></label>
+    </div>
+    <div class="row mins-chips te-mins">
+      <span class="muted">所要:</span>
+      <button type="button" data-min="5">5分</button>
+      <button type="button" data-min="10">10分</button>
+      <button type="button" data-min="20">20分</button>
+      <button type="button" data-min="30">30分</button>
+      <button type="button" data-min="60">60分</button>
+      <input id="te-minutes" type="number" min="1" placeholder="分" style="width:60px">
+    </div>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="te-focus"> 🎯集中力が必要</label>
+      <label class="chk"><input type="checkbox" id="te-delegate-on"> 🤝委任する</label>
+      <select id="te-delegate" class="hidden">
+        <option value="近藤">近藤</option>
+        <option value="榊原">榊原</option>
+        <option value="竹市">竹市</option>
+      </select>
+    </div>
+    <div class="row te-actions">
+      <button id="te-save" class="primary" type="button">保存</button>
+      <button id="te-cancel" class="ghost" type="button">キャンセル</button>
+      <button id="te-delete" class="danger hidden" type="button">削除</button>
+    </div>
+  </div>
 </div>
 
 <script src="config.js"></script>
