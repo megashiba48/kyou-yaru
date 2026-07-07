@@ -51,6 +51,22 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 #pomo-task { font-size: .8rem; opacity: .85; margin-bottom: 10px; }
 .pomo-btns { justify-content: center; }
 .pomo-btns button { min-width: 90px; }
+#pomo-rate { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; min-height: 0; }
+#pomo-rate .pr-q { font-size: .85rem; opacity: .9; }
+#pomo-rate button { font-size: 1.3rem; padding: 4px 12px; border-radius: 10px; background: rgba(255,255,255,.18); border: none; }
+#pomo-rate .muted { color: rgba(255,255,255,.85); }
+
+/* 集中時間帯ヒートマップ(実測) */
+#focus-hours { background: var(--card); border-radius: var(--radius); padding: 12px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+.fh-grid { display: flex; gap: 2px; margin-top: 8px; }
+.fh-col { flex: 1; min-width: 0; }
+.fh-cell { height: 26px; border-radius: 4px; }
+.fh-cell.empty { background: #eef0f6; }
+.fh-done { height: 18px; margin-top: 2px; display: flex; align-items: flex-end; }
+.fh-done .b { width: 100%; background: #c7cbdd; border-radius: 2px 2px 0 0; }
+.fh-h { font-size: .55rem; color: var(--muted); text-align: center; margin-top: 2px; }
+.fh-legend { font-size: .7rem; }
+.fh-note { margin: 8px 0 0; }
 #pomo-toggle { background: #fff; color: var(--indigo); font-weight: 700; }
 #pomo-skip { background: rgba(255,255,255,.2); color: #fff; }
 #pomo-sound { background: rgba(255,255,255,.2); color: #fff; min-width: 44px; }

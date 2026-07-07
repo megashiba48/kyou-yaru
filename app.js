@@ -100,7 +100,7 @@ async function loadAll() {
     sb.from("routines").select("*"),
     sb.from("routine_log").select("*").gte("on_date", since30),
     sb.from("tasks").select("*").eq("status", "done").order("done_at", { ascending: false }).limit(1000),
-    sb.from("focus_log").select("on_date").gte("on_date", since14),
+    sb.from("focus_log").select("*").gte("on_date", new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10)),
     sb.from("goals").select("*").order("created_at"),
   ]);
   const routinesAll = r.data || [];
@@ -478,7 +478,17 @@ function renderTimeReco() {
   const focus = state.tasks.filter((t) => t.focus_needed);
   const light = state.tasks.filter((t) => (t.minutes && t.minutes <= 20) || t.delegate);
   let cls, msg, list;
-  if (h >= 8 && h < 10) {
+  const m = measuredFocusHours();
+  if (m) {
+    // 実測モード: ポモドーロの集中度評価から算出したあなた専用のレコメンド
+    if (m.top.includes(h)) {
+      cls = "reco reco-focus"; msg = "🔥 実測: あなたはこの時間に強い。重い『集中タスク』をどうぞ。"; list = focus;
+    } else if (m.low.includes(h)) {
+      cls = "reco reco-light"; msg = "🥱 実測: この時間は集中が落ちがち。軽いタスク・委任タスクを。"; list = light;
+    } else {
+      cls = "reco reco-neutral"; msg = "淡々とTOP3を進める時間帯。(実測レコメンド稼働中)"; list = [];
+    }
+  } else if (h >= 8 && h < 10) {
     cls = "reco reco-focus"; msg = "🌅 朝の集中タイム。重い『集中タスク』をどうぞ。"; list = focus;
   } else if (h >= 19 && h < 21) {
     cls = "reco reco-focus"; msg = "🌙 夜の集中タイム(21時まで)。重い『集中タスク』を。"; list = focus;
@@ -807,10 +817,58 @@ function renderInbox() {
 }
 
 // ---------- 実績タブ ----------
+let lastFocusId = null;
 function logFocusSet() {
   sb.auth.getUser().then(({ data }) => {
-    if (data?.user) sb.from("focus_log").insert({ user_id: data.user.id, on_date: todayStr(), task_id: nowOneId || null });
+    if (!data?.user) return;
+    sb.from("focus_log").insert({ user_id: data.user.id, on_date: todayStr(), task_id: nowOneId || null })
+      .select().single().then(({ data: row }) => {
+        if (row) { lastFocusId = row.id; showPomoRate(); }
+      });
   });
+}
+
+// セット完了直後の1タップ集中度評価(3=🔥 2=😐 1=😴)
+function showPomoRate() {
+  const box = $("#pomo-rate");
+  if (!box) return;
+  box.innerHTML = `<span class="pr-q">今のセット、集中できた?</span>
+    <button type="button" data-r="3">🔥</button><button type="button" data-r="2">😐</button><button type="button" data-r="1">😴</button>`;
+  box.querySelectorAll("button[data-r]").forEach((b) => b.addEventListener("click", async () => {
+    const id = lastFocusId;
+    lastFocusId = null;
+    if (!id) { box.innerHTML = ""; return; }
+    const { error } = await sb.from("focus_log").update({ rating: Number(b.dataset.r) }).eq("id", id);
+    box.innerHTML = error
+      ? `<span class="muted">記録できませんでした(${esc(error.message)})</span>`
+      : `<span class="muted">記録しました ✅</span>`;
+    setTimeout(() => { box.innerHTML = ""; }, 2500);
+  }));
+}
+
+// 実測の集中時間帯(評価30件以上・1時間あたり3件以上で判定)
+const MEASURE_MIN = 30;
+function focusHourStats() {
+  const rated = (state.focus || []).filter((f) => f.rating && f.created_at);
+  const byHour = {};
+  for (const f of rated) {
+    const h = new Date(f.created_at).getHours();
+    (byHour[h] = byHour[h] || []).push(f.rating);
+  }
+  const hours = Object.entries(byHour).map(([h, a]) => ({
+    h: Number(h), n: a.length, avg: a.reduce((x, y) => x + y, 0) / a.length,
+  }));
+  return { total: rated.length, hours };
+}
+function measuredFocusHours() {
+  const { total, hours } = focusHourStats();
+  if (total < MEASURE_MIN) return null;
+  const solid = hours.filter((x) => x.n >= 3);
+  if (!solid.length) return null;
+  return {
+    top: solid.filter((x) => x.avg >= 2.5).map((x) => x.h),
+    low: solid.filter((x) => x.avg <= 1.7).map((x) => x.h),
+  };
 }
 
 const dstr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -824,10 +882,46 @@ function weekStartStr() {
 
 function renderResults() {
   renderAtBat();
+  renderFocusHours();
   renderActivity14();
   renderGlory();
   renderGoals();
   renderDone();
+}
+
+// 集中時間帯ヒートマップ(実測)。上段=集中度評価、下段=タスク完了数、横軸=時間帯
+function renderFocusHours() {
+  const box = $("#focus-hours");
+  if (!box) return;
+  const { total, hours } = focusHourStats();
+  const byHour = {};
+  for (const x of hours) byHour[x.h] = x;
+  const doneByHour = {};
+  let doneMax = 1;
+  for (const t of state.done) if (t.done_at) {
+    const h = new Date(t.done_at).getHours();
+    doneByHour[h] = (doneByHour[h] || 0) + 1;
+    doneMax = Math.max(doneMax, doneByHour[h]);
+  }
+  const HOURS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1];
+  const cols = HOURS.map((h) => {
+    const s = byHour[h];
+    const alpha = s ? (0.15 + 0.85 * (s.avg - 1) / 2) : 0;
+    const cell = s
+      ? `<div class="fh-cell" style="background:rgba(79,70,229,${alpha.toFixed(2)})" title="${h}時: 平均${s.avg.toFixed(1)} (${s.n}回)"></div>`
+      : `<div class="fh-cell empty"></div>`;
+    const dh = doneByHour[h] || 0;
+    const bar = `<div class="fh-done"><div class="b" style="height:${dh ? Math.max(12, Math.round(dh / doneMax * 100)) : 0}%"></div></div>`;
+    return `<div class="fh-col">${cell}${bar}<div class="fh-h">${h}</div></div>`;
+  }).join("");
+  const m = measuredFocusHours();
+  const note = m
+    ? `🔥 あなたの集中時間帯(実測): <b>${(m.top.length ? m.top : ["判定中"]).map((x) => typeof x === "number" ? x + "時" : x).join("・")}</b> — タスクタブのおすすめも実測で出しています`
+    : `実測データ収集中: <b>${total} / ${MEASURE_MIN}件</b>。ポモドーロのあとに🔥😐😴を押すと貯まり、${MEASURE_MIN}件でおすすめが"あなた専用"に切り替わります`;
+  box.innerHTML = `
+    <div class="fh-legend muted">上段=集中度(濃いほど🔥) / 下段=タスク完了数 / 横軸=時間帯</div>
+    <div class="fh-grid">${cols}</div>
+    <p class="fh-note muted">${note}</p>`;
 }
 
 function renderAtBat() {
