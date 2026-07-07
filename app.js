@@ -94,17 +94,39 @@ let state = { tasks: [], routines: [], logs: [], done: [] };
 
 async function loadAll() {
   const since14 = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+  const since30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
   const [t, r, l, d, f, g] = await Promise.all([
     sb.from("tasks").select("*").eq("status", "open").order("created_at"),
-    sb.from("routines").select("*").eq("active", true),
-    sb.from("routine_log").select("*").eq("on_date", todayStr()),
+    sb.from("routines").select("*"),
+    sb.from("routine_log").select("*").gte("on_date", since30),
     sb.from("tasks").select("*").eq("status", "done").order("done_at", { ascending: false }).limit(1000),
     sb.from("focus_log").select("on_date").gte("on_date", since14),
     sb.from("goals").select("*").order("created_at"),
   ]);
-  state = { tasks: t.data || [], routines: r.data || [], logs: l.data || [], done: d.data || [],
+  const routinesAll = r.data || [];
+  const rlogs = l.data || [];
+  state = { tasks: t.data || [], routinesAll, routines: routinesAll.filter((x) => x.active),
+    rlogs, logs: rlogs.filter((x) => x.on_date === todayStr()), done: d.data || [],
     focus: f.data || [], goals: g.data || [] };
 }
+
+// ルーティンの放置日数(昨日から遡り、予定曜日なのに記録がない日を数える。記録=完了/休みどちらでも可)
+function missedDays(r) {
+  const created = (r.created_at || "").slice(0, 10);
+  let missed = 0;
+  for (let i = 1; i <= 30; i++) {
+    const d = new Date(Date.now() - i * 86400000);
+    const ds = dstr(d);
+    if (created && ds < created) break;
+    if (!r.days.includes(d.getDay())) continue;
+    if (state.rlogs.some((l) => l.routine_id === r.id && l.on_date === ds)) break;
+    missed++;
+  }
+  return missed;
+}
+
+// ルーティンの完了記録(実績カウント用)
+const routineDones = () => (state.rlogs || []).filter((l) => l.result === "done");
 
 // ---------- 「今日の候補」スコア ----------
 // 大きいほど先。締切の近さ > 優先度 > 放置ペナルティ > 短時間優遇
@@ -122,6 +144,7 @@ function score(item) {
     s += Math.min(item.postpone_count, 5) * 8;  // 放置するほど浮上
   } else {
     s += 50; // ルーティンは「毎日の約束」として中程度で浮上
+    s += Math.min(item.missed || 0, 5) * 8; // 放置するほど浮上
   }
   if (item.minutes && item.minutes <= 15) s += 10; // 着手しやすいものを少し上げる
   return s;
@@ -143,7 +166,7 @@ function todayPool() {
     if (!r.days.includes(dow)) continue;
     if (state.logs.some((l) => l.routine_id === r.id)) continue; // 今日済み/スキップ済み
     items.push({ kind: "routine", id: r.id, name: r.name, minutes: r.minutes,
-      deadline: null, priority: 2, postpone_count: 0, top3: false });
+      deadline: null, priority: 2, postpone_count: 0, top3: false, missed: missedDays(r) });
   }
   const visible = items.filter((i) => !skips.includes(i.id));
   visible.sort((a, b) => {
@@ -198,6 +221,16 @@ async function completeItem(i) {
   if (nowOneId === i.id) nowOneId = null;
   await refresh();
 }
+
+// ルーティンを今日は休む(実績には数えないが、放置扱いにもしない)
+async function restRoutine(id) {
+  await sb.from("routine_log").insert({ routine_id: id, on_date: todayStr(), result: "rest" });
+  if (nowOneId === id) nowOneId = null;
+  await refresh();
+}
+
+// 放置警告バッジ(予定曜日なのに2日以上記録なし)
+const warnHtml = (i) => i.kind === "routine" && i.missed >= 2 ? `<span class="warn"> ⚠${i.missed}日放置</span>` : "";
 
 function renderToday() {
   const d = new Date();
@@ -257,11 +290,12 @@ function renderNowOne(pool) {
   if (!i) { box.innerHTML = `<p class="muted">タスクがありません。タスクタブで足すと、ここに1個ハイライトされます。</p>`; return; }
   box.innerHTML = `
     <div class="now-card">
-      <div class="now-name">${esc(i.name)}</div>
+      <div class="now-name">${esc(i.name)}${warnHtml(i)}</div>
       <div class="now-meta">${metaText(i)}</div>
       <div class="row now-actions">
         <button class="done-btn primary">やった ✅</button>
         <button class="later-btn">あとで</button>
+        ${i.kind === "routine" ? '<button class="rest-btn">今日は休む 😴</button>' : ""}
       </div>
       <div class="row now-repick">
         <span class="muted">選び直す:</span>
@@ -271,6 +305,8 @@ function renderNowOne(pool) {
     </div>`;
   box.querySelector(".done-btn").addEventListener("click", () => completeItem(i));
   box.querySelector(".later-btn").addEventListener("click", () => { addLater(i.id); nowOneId = null; renderToday(); });
+  const restBtn = box.querySelector(".rest-btn");
+  if (restBtn) restBtn.addEventListener("click", () => restRoutine(i.id));
   box.querySelector(".rp-pri").addEventListener("click", () => { nowOneMode = "priority"; nowOneId = null; renderToday(); });
   box.querySelector(".rp-rnd").addEventListener("click", () => { nowOneMode = "random"; nowOneId = null; renderToday(); });
 }
@@ -283,9 +319,10 @@ function renderRest(pool) {
   for (const i of rest) {
     const li = document.createElement("li");
     const canTop3 = i.kind === "task" && t3ids.length < 3;
-    li.innerHTML = `<span class="name">${esc(i.name)}</span><span class="meta">${metaText(i)}</span>
-      ${canTop3 ? '<button class="t3-b">TOP3</button>' : ""}<button class="done-b2">完了</button>`;
+    li.innerHTML = `<span class="name">${esc(i.name)}${warnHtml(i)}</span><span class="meta">${metaText(i)}</span>
+      ${canTop3 ? '<button class="t3-b">TOP3</button>' : ""}${i.kind === "routine" ? '<button class="rest-b2">休む</button>' : ""}<button class="done-b2">完了</button>`;
     if (canTop3) li.querySelector(".t3-b").addEventListener("click", () => { toggleTop3(i.id); renderToday(); });
+    if (i.kind === "routine") li.querySelector(".rest-b2").addEventListener("click", () => restRoutine(i.id));
     li.querySelector(".done-b2").addEventListener("click", () => completeItem(i));
     ul.appendChild(li);
   }
@@ -536,12 +573,16 @@ function renderDone() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
   const today = todayStr();
-  const weekAgo = new Date(Date.now() - 6 * 86400000);
-  const todayCount = state.done.filter((t) => doneDate(t) === today).length;
-  const weekCount = state.done.filter((t) => new Date(t.done_at) >= weekAgo).length;
-  $("#done-summary").textContent = state.done.length
-    ? `今日 ${todayCount}件 / 直近7日 ${weekCount}件 / 記録上 ${state.done.length}件`
-    : "まだありません。タスクを完了するとここに貯まります。";
+  const weekAgoStr = dstr(new Date(Date.now() - 6 * 86400000));
+  const rmap = new Map((state.routinesAll || []).map((r) => [r.id, r.name]));
+  const rdones = routineDones();
+  const todayCount = state.done.filter((t) => doneDate(t) === today).length
+    + rdones.filter((l) => l.on_date === today).length;
+  const weekCount = state.done.filter((t) => doneDate(t) >= weekAgoStr).length
+    + rdones.filter((l) => l.on_date >= weekAgoStr).length;
+  $("#done-summary").textContent = (state.done.length || rdones.length)
+    ? `今日 ${todayCount}件 / 直近7日 ${weekCount}件 / 記録上 ${state.done.length + rdones.length}件(ルーティン含む)`
+    : "まだありません。タスクやルーティンを完了するとここに貯まります。";
 
   const box = $("#done-list");
   box.innerHTML = "";
@@ -551,12 +592,18 @@ function renderDone() {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(t);
   }
-  for (const [date, items] of [...groups.entries()].slice(0, 30)) {
+  for (const l of rdones) {
+    if (!groups.has(l.on_date)) groups.set(l.on_date, []);
+    groups.get(l.on_date).push({ routine: true, name: rmap.get(l.routine_id) || "ルーティン" });
+  }
+  const sorted = [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  for (const [date, items] of sorted.slice(0, 30)) {
     const d = new Date(date + "T00:00:00");
     const div = document.createElement("div");
     div.className = "done-group";
     div.innerHTML = `<div class="done-date">${date === today ? "今日" : date.slice(5).replace("-", "/") + "(" + WEEKDAYS[d.getDay()] + ")"} — ${items.length}件</div>` +
       items.map((t) => {
+        if (t.routine) return `<div class="done-item">🔁 ${esc(t.name)} <span class="meta">ルーティン</span></div>`;
         const hm = new Date(t.done_at);
         return `<div class="done-item">✅ ${esc(t.name)} <span class="meta">${String(hm.getHours()).padStart(2, "0")}:${String(hm.getMinutes()).padStart(2, "0")}</span></div>`;
       }).join("");
@@ -595,8 +642,11 @@ function renderRoutines() {
   for (const r of state.routines) {
     const li = document.createElement("li");
     const daysTxt = r.days.length === 7 ? "毎日" : r.days.map((d) => WEEKDAYS[d]).join("");
-    li.innerHTML = `<span class="name">${esc(r.name)}</span>
-      <span class="meta">${daysTxt}${r.minutes ? "・" + r.minutes + "分" : ""}</span>
+    const missed = missedDays(r);
+    const todayLog = state.logs.find((l) => l.routine_id === r.id);
+    const status = todayLog ? (todayLog.result === "done" ? "・今日✅" : "・今日😴休み") : "";
+    li.innerHTML = `<span class="name">${esc(r.name)}${missed >= 2 ? `<span class="warn"> ⚠${missed}日放置</span>` : ""}</span>
+      <span class="meta">${daysTxt}${r.minutes ? "・" + r.minutes + "分" : ""}${status}</span>
       <button class="danger del-b">削除</button>`;
     li.querySelector(".del-b").addEventListener("click", async () => {
       if (!confirm(`ルーティン「${r.name}」を削除しますか?`)) return;
@@ -785,10 +835,11 @@ function renderAtBat() {
   const days = new Set();
   for (const t of state.done) if (t.done_at && t.done_at.slice(0, 10) >= ws) days.add(t.done_at.slice(0, 10));
   for (const f of (state.focus || [])) if (f.on_date >= ws) days.add(f.on_date);
+  for (const l of routineDones()) if (l.on_date >= ws) days.add(l.on_date);
   $("#atbat").innerHTML = `<div class="atbat-card">
     <div class="ab-label">今週の打席数</div>
     <div class="ab-num">${days.size}<span>打席</span></div>
-    <div class="ab-note muted">1日1つでも完了 or ポモ1セットで打席+1。途切れてもリセットしません。</div>
+    <div class="ab-note muted">1日1つでも完了(タスク/ルーティン) or ポモ1セットで打席+1。途切れてもリセットしません。</div>
   </div>`;
 }
 
@@ -796,6 +847,7 @@ function renderActivity14() {
   const counts = {};
   for (const t of state.done) if (t.done_at) { const ds = t.done_at.slice(0, 10); counts[ds] = (counts[ds] || 0) + 1; }
   for (const f of (state.focus || [])) counts[f.on_date] = (counts[f.on_date] || 0) + 1;
+  for (const l of routineDones()) counts[l.on_date] = (counts[l.on_date] || 0) + 1;
   const days = [];
   let max = 1;
   for (let i = 13; i >= 0; i--) {
@@ -813,6 +865,8 @@ function renderActivity14() {
 function renderGlory() {
   const tally = {};
   for (const t of state.done) { const c = t.category || "その他"; tally[c] = (tally[c] || 0) + 1; }
+  const rd = routineDones().length;
+  if (rd) tally["ルーティン"] = (tally["ルーティン"] || 0) + rd;
   const entries = Object.entries(tally).sort((a, b) => b[1] - a[1]);
   const box = $("#glory");
   if (!entries.length) { box.innerHTML = `<p class="muted">完了タスクが貯まると、カテゴリ別にここへ積み上がります。</p>`; return; }
