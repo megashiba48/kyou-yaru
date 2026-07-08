@@ -166,7 +166,7 @@ function todayPool() {
     if (!r.days.includes(dow)) continue;
     if (state.logs.some((l) => l.routine_id === r.id)) continue; // 今日済み/スキップ済み
     items.push({ kind: "routine", id: r.id, name: r.name, minutes: r.minutes,
-      deadline: null, priority: 2, postpone_count: 0, top3: false, missed: missedDays(r) });
+      deadline: null, priority: 2, postpone_count: 0, top3: t3.includes(r.id), missed: missedDays(r) });
   }
   const visible = items.filter((i) => !skips.includes(i.id));
   visible.sort((a, b) => {
@@ -214,10 +214,10 @@ const byId = (pool, id) => pool.find((i) => i.id === id);
 async function completeItem(i) {
   if (i.kind === "task") {
     await sb.from("tasks").update({ status: "done", done_at: new Date().toISOString() }).eq("id", i.id);
-    setTop3(getTop3().filter((x) => x !== i.id));
   } else {
     await sb.from("routine_log").insert({ routine_id: i.id, on_date: todayStr(), result: "done" });
   }
+  setTop3(getTop3().filter((x) => x !== i.id)); // ルーティンも完了したらTOP3枠を空ける
   if (nowOneId === i.id) { pomoEarlyFinish(i.id); nowOneId = null; }
   await refresh();
 }
@@ -225,6 +225,7 @@ async function completeItem(i) {
 // ルーティンを今日は休む(実績には数えないが、放置扱いにもしない)
 async function restRoutine(id) {
   await sb.from("routine_log").insert({ routine_id: id, on_date: todayStr(), result: "rest" });
+  setTop3(getTop3().filter((x) => x !== id)); // 休んだルーティンもTOP3枠を空ける
   if (nowOneId === id) nowOneId = null;
   await refresh();
 }
@@ -255,7 +256,7 @@ function renderTop3(pool) {
     const slot = document.createElement("div");
     slot.className = "top3-slot" + (i ? "" : " empty");
     if (i) {
-      slot.innerHTML = `<div class="t3-name">${s + 1}. ${esc(i.name)}${i.postpone_count >= 3 ? '<span class="warn"> ・3回見送り</span>' : ""}</div>
+      slot.innerHTML = `<div class="t3-name">${s + 1}. ${i.kind === "routine" ? "🔁 " : ""}${esc(i.name)}${i.postpone_count >= 3 ? '<span class="warn"> ・3回見送り</span>' : ""}</div>
         <div class="t3-btns"><button class="done-b primary">完了</button><button class="off-b ghost">外す</button></div>`;
       slot.querySelector(".done-b").addEventListener("click", () => completeItem(i));
       slot.querySelector(".off-b").addEventListener("click", () => { toggleTop3(i.id); renderToday(); });
@@ -268,13 +269,13 @@ function renderTop3(pool) {
 }
 
 function openTop3Picker(pool) {
-  const cands = pool.filter((i) => i.kind === "task" && !i.top3);
+  const cands = pool.filter((i) => !i.top3);
   const box = $("#top3");
   const picker = document.createElement("div");
   picker.className = "t3-picker";
   picker.innerHTML = cands.length
     ? `<p class="muted">TOP3に入れるタスクを選ぶ:</p>` +
-      cands.map((i) => `<button type="button" data-id="${i.id}">${esc(i.name)}</button>`).join("") +
+      cands.map((i) => `<button type="button" data-id="${i.id}">${i.kind === "routine" ? "🔁 " : ""}${esc(i.name)}</button>`).join("") +
       `<button type="button" class="cancel-b ghost">やめる</button>`
     : `<p class="muted">入れられるタスクがありません。タスクタブで追加してください。</p><button type="button" class="cancel-b ghost">閉じる</button>`;
   box.appendChild(picker);
@@ -318,7 +319,7 @@ function renderRest(pool) {
   ul.innerHTML = "";
   for (const i of rest) {
     const li = document.createElement("li");
-    const canTop3 = i.kind === "task" && t3ids.length < 3;
+    const canTop3 = t3ids.length < 3;
     li.innerHTML = `<span class="name">${esc(i.name)}${warnHtml(i)}</span><span class="meta">${metaText(i)}</span>
       ${canTop3 ? '<button class="t3-b">TOP3</button>' : ""}${i.kind === "routine" ? '<button class="rest-b2">休む</button>' : ""}<button class="done-b2">完了</button>`;
     if (canTop3) li.querySelector(".t3-b").addEventListener("click", () => { toggleTop3(i.id); renderToday(); });
