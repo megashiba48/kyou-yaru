@@ -218,7 +218,7 @@ async function completeItem(i) {
   } else {
     await sb.from("routine_log").insert({ routine_id: i.id, on_date: todayStr(), result: "done" });
   }
-  if (nowOneId === i.id) nowOneId = null;
+  if (nowOneId === i.id) { pomoEarlyFinish(i.id); nowOneId = null; }
   await refresh();
 }
 
@@ -439,6 +439,19 @@ function beep() {
     o.frequency.value = 880; g.gain.value = 0.08;
     o.start(); o.stop(ctx.currentTime + 0.25);
   } catch (e) { /* 無音でよい */ }
+}
+
+// 紐付きタスクを25分より早く完了した時も1セット扱い(セット数と🔥😐😴評価を取りこぼさない)
+function pomoEarlyFinish(taskId) {
+  if (pomo.phase !== "work" || !pomo.running) return;
+  beep();
+  pomo.phase = "break";
+  pomo.remaining = BREAK_SEC;
+  pomo.running = false;
+  pomo.endsAt = 0;
+  pomoInc();
+  logFocusSet(taskId);
+  updatePomo();
 }
 
 function pomoAdvance(natural) {
@@ -884,10 +897,12 @@ function renderInbox() {
 
 // ---------- 実績タブ ----------
 let lastFocusId = null;
-function logFocusSet() {
+function logFocusSet(taskId) {
+  // 早期完了はnowOneIdが直後にクリアされるので、呼び出し時点のタスクIDを引数で受け取る
+  const tid = taskId ?? nowOneId ?? null;
   sb.auth.getUser().then(({ data }) => {
     if (!data?.user) return;
-    sb.from("focus_log").insert({ user_id: data.user.id, on_date: todayStr(), task_id: nowOneId || null })
+    sb.from("focus_log").insert({ user_id: data.user.id, on_date: todayStr(), task_id: tid })
       .select().single().then(({ data: row }) => {
         if (row) {
           lastFocusId = row.id;
