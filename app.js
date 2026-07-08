@@ -373,14 +373,24 @@ function updatePomo() {
   el.classList.toggle("break", pomo.phase === "break");
   $("#pomo-phase").textContent = pomo.phase === "work" ? "作業" : "休憩";
   $("#pomo-time").textContent = fmtSec(pomo.remaining);
-  $("#pomo-toggle").textContent = pomo.running ? "一時停止" : "開始";
+  $("#pomo-toggle").textContent = pomo.running ? "一時停止" : (pomo.phase === "break" ? "休憩を開始" : "開始");
   $("#pomo-count").textContent = `今日 ${pomoCount()}セット`;
 }
 
 function updatePomoTask(pool) {
   const i = nowOneId && pool ? byId(pool, nowOneId) : null;
   const el = $("#pomo-task");
-  if (el) el.textContent = i ? "▶ " + i.name : "紐付けなし(今すぐ1個に自動連動)";
+  if (!el) return;
+  if (!i) { el.textContent = "紐付けなし(今すぐ1個に自動連動)"; return; }
+  let txt = "▶ " + i.name;
+  // 25分より長い見積タスクは「何セットで終わるか」を可視化
+  if (i.minutes && i.minutes > WORK_SEC / 60) {
+    const need = Math.ceil(i.minutes / (WORK_SEC / 60));
+    const done = (state.focus || []).filter((f) => f.on_date === todayStr() && f.task_id === i.id).length;
+    const left = Math.max(0, need - done);
+    txt += ` ｜ 見積${i.minutes}分=約${need}セット（今日 ✅${done}/${need}${left ? `・あと${left}` : "・目安クリア"}）`;
+  }
+  el.textContent = txt;
 }
 
 function beep() {
@@ -396,10 +406,22 @@ function beep() {
 
 function pomoAdvance(natural) {
   const wasWork = pomo.phase === "work";
-  if (natural) { if (wasWork) { pomoInc(); logFocusSet(); } beep(); }
+  if (natural) {
+    beep();
+    // 自然終了は自動で次フェーズへ流さず、いったん停止して待つ
+    // (作業→休憩に勝手に進んで集中度評価を押し損ねる事故を防ぐ)
+    pomo.phase = wasWork ? "break" : "work";
+    pomo.remaining = pomo.phase === "work" ? WORK_SEC : BREAK_SEC;
+    pomo.running = false;
+    pomo.endsAt = 0;
+    if (wasWork) { pomoInc(); logFocusSet(); } // 評価UIを表示(次の休憩は手動開始)
+    updatePomo();
+    return;
+  }
+  // スキップ(手動)は従来どおり即切替
   pomo.phase = wasWork ? "break" : "work";
   pomo.remaining = pomo.phase === "work" ? WORK_SEC : BREAK_SEC;
-  pomo.endsAt = Date.now() + pomo.remaining * 1000; // 自動で次フェーズへ
+  pomo.endsAt = pomo.running ? Date.now() + pomo.remaining * 1000 : 0;
   updatePomo();
 }
 
@@ -823,7 +845,12 @@ function logFocusSet() {
     if (!data?.user) return;
     sb.from("focus_log").insert({ user_id: data.user.id, on_date: todayStr(), task_id: nowOneId || null })
       .select().single().then(({ data: row }) => {
-        if (row) { lastFocusId = row.id; showPomoRate(); }
+        if (row) {
+          lastFocusId = row.id;
+          (state.focus = state.focus || []).push(row); // 進捗表示に即反映
+          updatePomoTask(todayPool());
+          showPomoRate();
+        }
       });
   });
 }
