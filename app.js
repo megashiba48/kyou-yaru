@@ -361,6 +361,42 @@ function renderBlank() {
 // ---------- ポモドーロ ----------
 const WORK_SEC = 25 * 60, BREAK_SEC = 5 * 60;
 let pomo = { phase: "work", remaining: WORK_SEC, running: false, endsAt: 0 };
+
+// タイマー状態を保存(アプリを閉じても25分が消えないように)
+const POMO_STATE_KEY = "pomoState";
+function savePomoState() {
+  localStorage.setItem(POMO_STATE_KEY, JSON.stringify({
+    phase: pomo.phase, remaining: pomo.remaining, running: pomo.running, endsAt: pomo.endsAt,
+  }));
+}
+function restorePomoState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(POMO_STATE_KEY) || "null");
+    if (!s) return;
+    pomo = {
+      phase: s.phase === "break" ? "break" : "work",
+      remaining: Number(s.remaining) || WORK_SEC,
+      running: !!s.running,
+      endsAt: Number(s.endsAt) || 0,
+    };
+    if (pomo.running) {
+      const left = Math.round((pomo.endsAt - Date.now()) / 1000);
+      if (left <= 0) { pomoAdvance(true); return; } // 留守中に終了していた→停止して評価待ち
+      pomo.remaining = left;
+    }
+  } catch (e) { pomo = { phase: "work", remaining: WORK_SEC, running: false, endsAt: 0 }; }
+}
+
+// 終了通知＋バイブ(画面を見ていなくても気づけるように)
+function notifyPomo(title, body) {
+  try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) { /* 非対応でよい */ }
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const opts = { body, icon: "icon-192.png", tag: "pomo", vibrate: [200, 100, 200] };
+  navigator.serviceWorker?.getRegistration()
+    .then((reg) => reg && reg.showNotification ? reg.showNotification(title, opts) : new Notification(title, opts))
+    .catch(() => { try { new Notification(title, opts); } catch (e) { /* 無視 */ } });
+}
+
 const pomoKey = () => `pomo:${todayStr()}`;
 const pomoCount = () => Number(localStorage.getItem(pomoKey()) || 0);
 const pomoInc = () => localStorage.setItem(pomoKey(), pomoCount() + 1);
@@ -375,6 +411,7 @@ function updatePomo() {
   $("#pomo-time").textContent = fmtSec(pomo.remaining);
   $("#pomo-toggle").textContent = pomo.running ? "一時停止" : (pomo.phase === "break" ? "休憩を開始" : "開始");
   $("#pomo-count").textContent = `今日 ${pomoCount()}セット`;
+  savePomoState();
 }
 
 function updatePomoTask(pool) {
@@ -408,6 +445,10 @@ function pomoAdvance(natural) {
   const wasWork = pomo.phase === "work";
   if (natural) {
     beep();
+    notifyPomo(
+      wasWork ? "🍅 25分おつかれさま！" : "☕ 休憩おわり",
+      wasWork ? "集中度を🔥😐😴で記録して、休憩へどうぞ" : "「開始」を押して次の作業へ",
+    );
     // 自然終了は自動で次フェーズへ流さず、いったん停止して待つ
     // (作業→休憩に勝手に進んで集中度評価を押し損ねる事故を防ぐ)
     pomo.phase = wasWork ? "break" : "work";
@@ -440,6 +481,8 @@ $("#pomo-toggle").addEventListener("click", () => {
   } else {
     pomo.endsAt = Date.now() + pomo.remaining * 1000;
     pomo.running = true;
+    // 初回の開始時に通知許可を求める(終了を画面オフでも知らせるため)
+    if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
   }
   updatePomo();
 });
@@ -450,6 +493,7 @@ $("#pomo-sound").addEventListener("click", () => {
   $("#pomo-sound").textContent = off ? "🔔" : "🔕";
 });
 if (localStorage.getItem("pomoSound") === "off") $("#pomo-sound").textContent = "🔕";
+restorePomoState();
 updatePomo();
 
 // ---------- タスクタブ ----------
