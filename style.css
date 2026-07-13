@@ -40,17 +40,22 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .row input[type="number"] { width: 90px; }
 
-/* ポモドーロ */
-#pomodoro { border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; color: #fff;
-  box-shadow: 0 4px 14px rgba(0,0,0,.12); text-align: center; }
-#pomodoro.work { background: var(--indigo); }
+/* 3秒クイック追加 */
+#quick-add input { width: 100%; background: #fff; }
+
+/* ポモドーロ(「今すぐ1個」カードの下半分として一体表示) */
+#now-wrap .now-card { border-radius: var(--radius) var(--radius) 0 0; }
+#pomodoro { border-radius: 0 0 var(--radius) var(--radius); padding: 10px 14px; margin-bottom: 14px;
+  color: #fff; box-shadow: 0 6px 20px rgba(79,70,229,.35); }
+#pomodoro.work { background: #4338ca; }
 #pomodoro.break { background: #0e9f6e; }
-.pomo-top { display: flex; justify-content: space-between; font-size: .8rem; opacity: .9; }
-#pomo-count { color: rgba(255,255,255,.85); }
-#pomo-time { font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
-#pomo-task { font-size: .8rem; opacity: .85; margin-bottom: 10px; }
-.pomo-btns { justify-content: center; }
-.pomo-btns button { min-width: 90px; }
+.pomo-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#pomo-phase { font-size: .8rem; opacity: .9; }
+#pomo-count { color: rgba(255,255,255,.85); font-size: .75rem; }
+#pomo-time { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.pomo-row .sp { flex: 1; }
+.pomo-row button { padding: 8px 12px; font-size: .85rem; }
+#pomo-task { font-size: .8rem; opacity: .85; margin-top: 4px; }
 #pomo-rate { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; min-height: 0; }
 #pomo-rate .pr-q { font-size: .85rem; opacity: .9; }
 #pomo-rate button { font-size: 1.3rem; padding: 4px 12px; border-radius: 10px; background: rgba(255,255,255,.18); border: none; }
@@ -97,6 +102,24 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 .now-repick { align-items: center; margin-top: 10px; font-size: .8rem; }
 .now-repick .muted { color: rgba(255,255,255,.8); }
 .now-repick button { background: rgba(255,255,255,.2); color: #fff; padding: 6px 10px; font-size: .8rem; }
+
+/* 今日のルーティン折りたたみ */
+.rt-head { width: 100%; text-align: left; background: #eef0fb; border-radius: 12px; padding: 12px 14px;
+  font-size: .9rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+.rt-arrow { color: var(--muted); font-size: .8rem; font-weight: 400; }
+.rt-list { margin-top: 8px; }
+
+/* 委任=返事待ち */
+.dg-nudge { background: #fff7ed; border-radius: 12px; padding: 12px 14px; margin: 8px 0;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dg-nudge .name { flex: 1; font-size: .88rem; min-width: 60%; }
+.dg-nudge button { padding: 6px 10px; font-size: .8rem; background: #fde8cd; }
+.dg-nudge button.ghost { background: transparent; }
+.dg-row { background: var(--card); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 10px; border-left: 4px solid var(--tag, #888); }
+.dg-row .name { flex: 1; }
+.dg-row .meta { color: var(--muted); font-size: .75rem; white-space: nowrap; }
+.dg-row button { padding: 6px 10px; font-size: .8rem; }
 
 /* 余白ブロック */
 #blank-block { margin: 12px 0; }

@@ -26,14 +26,49 @@ const todayStr = () => {
 };
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
-// 「今日はやらない」の記録(端末ローカル・その日限り)
+// ---------- その日の状態(TOP3/スキップ/あとで) ----------
+// DB(day_state)で端末間同期する。PCで組んだTOP3がスマホでも同じに見える。
+// day_stateテーブル未作成や読み込み失敗時は従来のlocalStorage動作(端末ごと)に自動フォールバック。
+let dayState = null; // 同期が効いている時だけ非null
+let uid = null;      // day_state保存に使うユーザーID
+const lsGet = (k) => JSON.parse(localStorage.getItem(k) || "[]");
 const skipKey = () => `skip:${todayStr()}`;
-const getSkips = () => JSON.parse(localStorage.getItem(skipKey()) || "[]");
-const addSkip = (id) => localStorage.setItem(skipKey(), JSON.stringify([...getSkips(), id]));
-// 「あとで」の後回し記録(その日限り・候補の並びを下げる)
 const laterKey = () => `later:${todayStr()}`;
-const getLaters = () => JSON.parse(localStorage.getItem(laterKey()) || "[]");
-const addLater = (id) => localStorage.setItem(laterKey(), JSON.stringify([...getLaters(), id]));
+const top3Key = () => `top3:${todayStr()}`;
+const getSkips = () => (dayState ? dayState.skips : lsGet(skipKey()));
+const getLaters = () => (dayState ? dayState.laters : lsGet(laterKey()));
+const getTop3 = () => (dayState ? dayState.top3 : lsGet(top3Key()));
+function setDayPart(part, arr) {
+  const key = { top3: top3Key(), skips: skipKey(), laters: laterKey() }[part];
+  localStorage.setItem(key, JSON.stringify(arr)); // オフライン保険で常に端末にも残す
+  if (dayState) { dayState[part] = arr; pushDayState(); }
+}
+const addSkip = (id) => setDayPart("skips", [...getSkips(), id]);
+const addLater = (id) => setDayPart("laters", [...getLaters(), id]);
+const setTop3 = (ids) => setDayPart("top3", ids.slice(0, 3));
+
+async function loadDayState() {
+  try {
+    const { data, error } = await sb.from("day_state")
+      .select("top3,skips,laters").eq("on_date", todayStr()).maybeSingle();
+    if (error) { dayState = null; return; } // テーブル未作成など → localStorage動作
+    if (data) {
+      dayState = { top3: data.top3 || [], skips: data.skips || [], laters: data.laters || [] };
+    } else {
+      // 今日の行がまだない → この端末のlocalStorage分を初期値として持ち上げる
+      dayState = { top3: lsGet(top3Key()), skips: lsGet(skipKey()), laters: lsGet(laterKey()) };
+      if (dayState.top3.length || dayState.skips.length || dayState.laters.length) await pushDayState();
+    }
+  } catch { dayState = null; }
+}
+async function pushDayState() {
+  if (!dayState || !uid) return;
+  await sb.from("day_state").upsert({
+    user_id: uid, on_date: todayStr(),
+    top3: dayState.top3, skips: dayState.skips, laters: dayState.laters,
+    updated_at: new Date().toISOString(),
+  });
+}
 
 // ---------- 認証 ----------
 $("#auth-send").addEventListener("click", async () => {
@@ -77,6 +112,7 @@ $("#auth-verify").addEventListener("click", async () => {
 let signedIn = false;
 sb.auth.onAuthStateChange((_event, session) => {
   signedIn = !!session;
+  uid = session?.user?.id || null;
   if (session) { show("app-view"); refresh(); }
   else show("auth-view");
 });
@@ -102,12 +138,15 @@ async function loadAll() {
     sb.from("tasks").select("*").eq("status", "done").order("done_at", { ascending: false }).limit(1000),
     sb.from("focus_log").select("*").gte("on_date", new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10)),
     sb.from("goals").select("*").order("created_at"),
+    loadDayState(),
   ]);
   const routinesAll = r.data || [];
   const rlogs = l.data || [];
   state = { tasks: t.data || [], routinesAll, routines: routinesAll.filter((x) => x.active),
     rlogs, logs: rlogs.filter((x) => x.on_date === todayStr()), done: d.data || [],
     focus: f.data || [], goals: g.data || [] };
+  // delegated_at列がまだ無いDBでも壊れないように、列の有無を実データから判定
+  state.hasDelegatedAt = [...state.tasks, ...state.done].some((x) => "delegated_at" in x);
 }
 
 // ルーティンの放置日数(昨日から遡り、予定曜日なのに記録がない日を数える。記録=完了/休みどちらでも可)
@@ -158,6 +197,7 @@ function todayPool() {
   const t3 = getTop3();
   const items = [];
   for (const t of state.tasks) {
+    if (t.delegate) continue; // 委任中=自分がやるものではなく待つもの → 運用タブの「返事待ち」棚へ
     items.push({ kind: "task", id: t.id, name: t.name, minutes: t.minutes,
       deadline: t.deadline, priority: t.priority, postpone_count: t.postpone_count,
       top3: t3.includes(t.id) });
@@ -178,10 +218,7 @@ function todayPool() {
   return visible;
 }
 
-// TOP3(端末内保存・その日限り)
-const top3Key = () => `top3:${todayStr()}`;
-const getTop3 = () => JSON.parse(localStorage.getItem(top3Key()) || "[]");
-const setTop3 = (ids) => localStorage.setItem(top3Key(), JSON.stringify(ids.slice(0, 3)));
+// TOP3(その日限り。保存はday_state同期/フォールバックはlocalStorage)
 function toggleTop3(id) {
   let ids = getTop3();
   if (ids.includes(id)) ids = ids.filter((x) => x !== id);
@@ -239,9 +276,10 @@ function renderToday() {
   const pool = todayPool();
   $("#today-empty").classList.toggle("hidden", pool.length > 0);
 
-  renderTop3(pool);
   if (!nowOneId || !pool.some((i) => i.id === nowOneId)) pickNowOne(pool);
   renderNowOne(pool);
+  renderTop3(pool);
+  renderDelegateNudge();
   renderBlank();
   renderRest(pool);
   updatePomoTask(pool);
@@ -315,19 +353,115 @@ function renderNowOne(pool) {
 function renderRest(pool) {
   const t3ids = getTop3();
   const rest = pool.filter((i) => !t3ids.includes(i.id) && i.id !== nowOneId);
-  const ul = $("#today-rest");
-  ul.innerHTML = "";
-  for (const i of rest) {
+  const canTop3 = t3ids.length < 3;
+  const restLi = (i) => {
     const li = document.createElement("li");
-    const canTop3 = t3ids.length < 3;
-    li.innerHTML = `<span class="name">${esc(i.name)}${warnHtml(i)}</span><span class="meta">${metaText(i)}</span>
+    li.innerHTML = `<span class="name">${i.kind === "routine" ? "🔁 " : ""}${esc(i.name)}${warnHtml(i)}</span><span class="meta">${metaText(i)}</span>
       ${canTop3 ? '<button class="t3-b">TOP3</button>' : ""}${i.kind === "routine" ? '<button class="rest-b2">休む</button>' : ""}<button class="done-b2">完了</button>`;
     if (canTop3) li.querySelector(".t3-b").addEventListener("click", () => { toggleTop3(i.id); renderToday(); });
     if (i.kind === "routine") li.querySelector(".rest-b2").addEventListener("click", () => restRoutine(i.id));
     li.querySelector(".done-b2").addEventListener("click", () => completeItem(i));
-    ul.appendChild(li);
+    return li;
+  };
+  // タスクは従来どおり並べ、ルーティンは1行サマリーに畳む(17本が混ざるごちゃつき対策)
+  const ul = $("#today-rest");
+  ul.innerHTML = "";
+  for (const i of rest.filter((x) => x.kind === "task")) ul.appendChild(restLi(i));
+  renderTodayRoutines(rest.filter((x) => x.kind === "routine"), restLi);
+}
+
+// 今日のルーティン折りたたみ(「6/17 済」の1行。タップで展開)
+let routinesOpen = false;
+function renderTodayRoutines(routines, makeLi) {
+  const box = $("#today-routines");
+  const dow = new Date().getDay();
+  const scheduled = state.routines.filter((r) => r.days.includes(dow));
+  if (!scheduled.length) { box.innerHTML = ""; return; }
+  const recorded = state.logs.filter((l) => scheduled.some((r) => r.id === l.routine_id)).length;
+  const warn = routines.some((r) => (r.missed || 0) >= 2) ? ' <span class="warn">⚠放置あり</span>' : "";
+  box.innerHTML = `
+    <button type="button" class="rt-head">🔁 ルーティン ${recorded}/${scheduled.length} 済${warn}
+      <span class="rt-arrow">${routinesOpen ? "▾ とじる" : "▸ ひらく"}</span></button>
+    <ul class="list rt-list${routinesOpen ? "" : " hidden"}"></ul>`;
+  box.querySelector(".rt-head").addEventListener("click", () => { routinesOpen = !routinesOpen; renderToday(); });
+  const ul = box.querySelector(".rt-list");
+  if (routinesOpen) {
+    for (const i of routines) ul.appendChild(makeLi(i));
+    if (!routines.length) ul.innerHTML = `<li><span class="name muted">${recorded >= scheduled.length ? "今日の分は全部記録済み 🎉" : "残りは上のTOP3/今すぐ1個に出ています"}</span></li>`;
   }
 }
+
+// ---------- 委任=返事待ち ----------
+// 委任タスクは自分の実行リストから外し、運用タブの「返事待ち」棚で待つ。
+// 3日動きがなければ今日タブに催促ナッジを出す。
+const NUDGE_DAYS = 3;
+const delegatedTasks = () => state.tasks.filter((t) => t.delegate);
+const waitDays = (t) => Math.floor((Date.now() - new Date(t.delegated_at || t.created_at)) / 86400000);
+const nudgeHideKey = () => `nudgeHide:${todayStr()}`;
+
+async function touchDelegated(t) {
+  // 催促した=待ち日数の起点をリセット(delegated_at列がまだ無いDBでは今日だけ非表示)
+  if (state.hasDelegatedAt) await sb.from("tasks").update({ delegated_at: new Date().toISOString() }).eq("id", t.id);
+  else localStorage.setItem(nudgeHideKey(), JSON.stringify([...lsGet(nudgeHideKey()), t.id]));
+  await refresh();
+}
+
+function renderDelegateNudge() {
+  const box = $("#delegate-nudge");
+  const hidden = lsGet(nudgeHideKey());
+  const stale = delegatedTasks().filter((t) => waitDays(t) >= NUDGE_DAYS && !hidden.includes(t.id));
+  box.innerHTML = "";
+  for (const t of stale) {
+    const el = document.createElement("div");
+    el.className = "dg-nudge";
+    el.innerHTML = `<span class="name">🤝 ${esc(t.delegate)}さんに委任して${waitDays(t)}日。「${esc(t.name)}」動いてる?</span>
+      <button class="nd-ping">催促した</button><button class="nd-hide ghost">今日は隠す</button>`;
+    el.querySelector(".nd-ping").addEventListener("click", () => touchDelegated(t));
+    el.querySelector(".nd-hide").addEventListener("click", () => {
+      localStorage.setItem(nudgeHideKey(), JSON.stringify([...lsGet(nudgeHideKey()), t.id]));
+      renderDelegateNudge();
+    });
+    box.appendChild(el);
+  }
+}
+
+function renderDelegated() {
+  const box = $("#delegated-list");
+  if (!box) return;
+  const list = delegatedTasks();
+  if (!list.length) { box.innerHTML = `<p class="muted">委任中のタスクはありません。タスク追加時に「🤝委任する」を付けるとここに入ります。</p>`; return; }
+  box.innerHTML = "";
+  for (const t of list) {
+    const d = waitDays(t);
+    const el = document.createElement("div");
+    el.className = "dg-row";
+    el.style.setProperty("--tag", DELEGATE_COLORS[t.delegate] || "#888");
+    el.innerHTML = `<span class="name">${esc(t.name)}</span>
+      <span class="meta">🤝${esc(t.delegate)}・待ち${d}日${d >= NUDGE_DAYS ? ' <span class="warn">⚠</span>' : ""}</span>
+      <button class="dg-done">完了</button><button class="dg-back">引き取る</button>`;
+    el.querySelector(".dg-done").addEventListener("click", async () => {
+      await sb.from("tasks").update({ status: "done", done_at: new Date().toISOString() }).eq("id", t.id);
+      await refresh();
+    });
+    el.querySelector(".dg-back").addEventListener("click", async () => {
+      const fields = { delegate: null };
+      if (state.hasDelegatedAt) fields.delegated_at = null;
+      await sb.from("tasks").update(fields).eq("id", t.id);
+      await refresh();
+    });
+    box.appendChild(el);
+  }
+}
+
+// ---------- 3秒クイック追加(名前だけで即入れる) ----------
+$("#quick-add").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("#qa-name").value.trim();
+  if (!name) return;
+  $("#qa-name").value = "";
+  await sb.from("tasks").insert({ name, priority: 2, source: "quick" });
+  await refresh();
+});
 
 // 余白ブロック(何もしない時間・端末内保存)
 const getBlank = () => JSON.parse(localStorage.getItem("blank") || '{"start":"13:00","min":30}');
@@ -535,7 +669,7 @@ $("#task-form").addEventListener("submit", async (e) => {
   const name = $("#task-name").value.trim();
   if (!name) return;
   const delegate = $("#task-delegate-on").checked ? $("#task-delegate").value : null;
-  await sb.from("tasks").insert({
+  const payload = {
     name,
     priority: Number($("#task-priority").value),
     minutes: $("#task-minutes").value ? Number($("#task-minutes").value) : null,
@@ -543,7 +677,9 @@ $("#task-form").addEventListener("submit", async (e) => {
     category: $("#task-category").value || null,
     focus_needed: $("#task-focus").checked,
     delegate,
-  });
+  };
+  if (delegate && state.hasDelegatedAt) payload.delegated_at = new Date().toISOString();
+  await sb.from("tasks").insert(payload);
   e.target.reset();
   $("#task-delegate").classList.add("hidden");
   document.querySelectorAll(".mins-chips button[data-min]").forEach((x) => x.classList.remove("on"));
@@ -1143,6 +1279,11 @@ $("#te-save").addEventListener("click", async () => {
     focus_needed: $("#te-focus").checked,
     delegate: $("#te-delegate-on").checked ? $("#te-delegate").value : null,
   };
+  if (state.hasDelegatedAt) {
+    const before = teCtx.task?.delegate || null;
+    if (fields.delegate && fields.delegate !== before) fields.delegated_at = new Date().toISOString(); // 委任した(相手を変えた)瞬間が待ちの起点
+    if (!fields.delegate) fields.delegated_at = null;
+  }
   if (teCtx.task) {
     await sb.from("tasks").update(fields).eq("id", teCtx.task.id);
   } else {
@@ -1218,7 +1359,7 @@ $("#ct-filter").addEventListener("click", () => {
   renderContact();
 });
 
-function renderOps() { renderContact(); renderSolo(); }
+function renderOps() { renderDelegated(); renderContact(); renderSolo(); }
 
 function renderContact() {
   const inSlot = nowInSlot();
