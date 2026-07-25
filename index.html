@@ -47,40 +47,47 @@
     <section id="tab-today" class="tab">
       <h2 id="today-date"></h2>
 
+      <!-- 主役:今日やる3つを決める。ここだけで開く→決める→閉じるが完結する -->
+      <p class="section-label">今日やる3つ<span class="simple-only">(決めたら閉じてOK)</span></p>
+      <div id="top3"></div>
+
       <!-- 3秒クイック追加(名前だけで即入れる。詳細は後から編集) -->
       <form id="quick-add">
         <input id="qa-name" placeholder="＋ 思いついたら即追加(名前だけでOK)" autocomplete="off" enterkeyhint="done">
       </form>
 
-      <p class="section-label">今すぐやる1個</p>
-      <div id="now-wrap">
-        <div id="now-one"></div>
-        <!-- ポモドーロ(上のカードと一体・今すぐ1個に自動連動) -->
-        <div id="pomodoro" class="work">
-          <div class="pomo-row">
-            <span id="pomo-phase">作業</span>
-            <span id="pomo-time">25:00</span>
-            <span id="pomo-count" class="muted"></span>
-            <span class="sp"></span>
-            <button id="pomo-toggle" class="primary">開始</button>
-            <button id="pomo-skip">スキップ</button>
-            <button id="pomo-sound" class="ghost">🔔</button>
+      <!-- 主役から降ろした一式(可逆・データもコードも消していない) -->
+      <div data-simple-hide>
+        <p class="section-label">今すぐやる1個</p>
+        <div id="now-wrap">
+          <div id="now-one"></div>
+          <!-- ポモドーロ(上のカードと一体・今すぐ1個に自動連動) -->
+          <div id="pomodoro" class="work">
+            <div class="pomo-row">
+              <span id="pomo-phase">作業</span>
+              <span id="pomo-time">25:00</span>
+              <span id="pomo-count" class="muted"></span>
+              <span class="sp"></span>
+              <button id="pomo-toggle" class="primary">開始</button>
+              <button id="pomo-skip">スキップ</button>
+              <button id="pomo-sound" class="ghost">🔔</button>
+            </div>
+            <div id="pomo-task" class="muted">紐付けなし</div>
+            <div id="pomo-rate"></div>
           </div>
-          <div id="pomo-task" class="muted">紐付けなし</div>
-          <div id="pomo-rate"></div>
         </div>
       </div>
 
-      <p class="section-label">今日のTOP3(最重要は3つまで)</p>
-      <div id="top3"></div>
+      <div id="delegate-nudge" data-simple-hide></div>
+      <div id="blank-block" data-simple-hide></div>
 
-      <div id="delegate-nudge"></div>
-      <div id="blank-block"></div>
+      <!-- 残りは畳む(見たい時だけ開く) -->
+      <details id="today-more">
+        <summary>ほかのタスク・ルーティンを見る</summary>
+        <ul id="today-rest" class="list"></ul>
+        <div id="today-routines"></div>
+      </details>
 
-      <p class="section-label">その他のタスク</p>
-      <ul id="today-rest" class="list"></ul>
-
-      <div id="today-routines"></div>
       <p id="today-empty" class="muted hidden">全部終わってます。おつかれさま 🎉</p>
     </section>
 
@@ -251,16 +258,22 @@
       </form>
       <div id="bucket-chips" class="chips"></div>
       <ul id="bucket-list" class="list"></ul>
-      <p class="muted">app v6.0</p>
+
+      <!-- 隠した機能をいつでも戻すスイッチ(データは消していない) -->
+      <div id="simple-switch">
+        <button id="simple-toggle" type="button" class="ghost"></button>
+        <p id="simple-note" class="muted"></p>
+      </div>
+      <p class="muted">app v6.1</p>
     </section>
   </main>
 
   <nav id="tabbar">
     <button data-tab="today" class="active">📌<span>今日</span></button>
-    <button data-tab="tasks">✅<span>タスク</span></button>
-    <button data-tab="inbox">💡<span>アイデア</span></button>
-    <button data-tab="ops">🔔<span>運用</span></button>
-    <button data-tab="results">🏆<span>実績</span></button>
+    <button data-tab="tasks" data-simple-hide>✅<span>タスク</span></button>
+    <button data-tab="inbox" data-simple-hide>💡<span>アイデア</span></button>
+    <button data-tab="ops" data-simple-hide>🔔<span>運用</span></button>
+    <button data-tab="results" data-simple-hide>🏆<span>実績</span></button>
     <button data-tab="bucket">🪣<span>バケット</span></button>
   </nav>
 </div>

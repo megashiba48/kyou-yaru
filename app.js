@@ -19,6 +19,12 @@ if (!configured) {
 
 const sb = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
 
+// ---------- シンプルモード(意思決定ツール版) ----------
+// 「今日やる3つ」と「バケット」以外をUIから隠すだけ。DB・関数は一切消していないので、
+// バケットタブ下のスイッチでいつでも全機能に戻せる。
+const SIMPLE_KEY = "simpleMode";
+let simpleMode = localStorage.getItem(SIMPLE_KEY) !== "off";
+
 // ---------- 日付ユーティリティ ----------
 const todayStr = () => {
   const d = new Date();
@@ -306,20 +312,29 @@ function renderTop3(pool) {
   }
 }
 
+// シンプルモードでは候補をまずタスクだけに絞る(ルーティン17本が混ざると"消化"に戻るため)
+let pickerRoutines = false;
 function openTop3Picker(pool) {
   const cands = pool.filter((i) => !i.top3);
+  const routines = cands.filter((i) => i.kind === "routine");
+  const list = simpleMode && !pickerRoutines ? cands.filter((i) => i.kind === "task") : cands;
   const box = $("#top3");
   const picker = document.createElement("div");
   picker.className = "t3-picker";
-  picker.innerHTML = cands.length
-    ? `<p class="muted">TOP3に入れるタスクを選ぶ:</p>` +
-      cands.map((i) => `<button type="button" data-id="${i.id}">${i.kind === "routine" ? "🔁 " : ""}${esc(i.name)}</button>`).join("") +
-      `<button type="button" class="cancel-b ghost">やめる</button>`
-    : `<p class="muted">入れられるタスクがありません。タスクタブで追加してください。</p><button type="button" class="cancel-b ghost">閉じる</button>`;
+  const moreBtn = simpleMode && !pickerRoutines && routines.length
+    ? `<button type="button" class="rt-more ghost">🔁 ルーティンからも選ぶ(${routines.length})</button>` : "";
+  picker.innerHTML = list.length
+    ? `<p class="muted">今日やる3つに入れるものを選ぶ:</p>` +
+      list.map((i) => `<button type="button" data-id="${i.id}">${i.kind === "routine" ? "🔁 " : ""}${esc(i.name)}</button>`).join("") +
+      moreBtn + `<button type="button" class="cancel-b ghost">やめる</button>`
+    : `<p class="muted">選べるものがありません。下の入力欄から追加してください。</p>` +
+      moreBtn + `<button type="button" class="cancel-b ghost">閉じる</button>`;
   box.appendChild(picker);
-  picker.querySelector(".cancel-b").addEventListener("click", () => renderToday());
+  picker.querySelector(".cancel-b").addEventListener("click", () => { pickerRoutines = false; renderToday(); });
+  const rtMore = picker.querySelector(".rt-more");
+  if (rtMore) rtMore.addEventListener("click", () => { pickerRoutines = true; renderToday(); openTop3Picker(todayPool()); });
   picker.querySelectorAll("button[data-id]").forEach((b) => {
-    b.addEventListener("click", () => { toggleTop3(b.dataset.id); renderToday(); });
+    b.addEventListener("click", () => { pickerRoutines = false; toggleTop3(b.dataset.id); renderToday(); });
   });
 }
 
@@ -1408,13 +1423,31 @@ function renderSolo() {
 }
 
 // ---------- タブ切り替え ----------
-document.querySelectorAll("#tabbar button").forEach((b) => {
-  b.addEventListener("click", () => {
-    document.querySelectorAll("#tabbar button").forEach((x) => x.classList.toggle("active", x === b));
-    document.querySelectorAll(".tab").forEach((t) => t.classList.add("hidden"));
-    $("#tab-" + b.dataset.tab).classList.remove("hidden");
-  });
+function openTab(btn) {
+  document.querySelectorAll("#tabbar button").forEach((x) => x.classList.toggle("active", x === btn));
+  document.querySelectorAll(".tab").forEach((t) => t.classList.add("hidden"));
+  $("#tab-" + btn.dataset.tab).classList.remove("hidden");
+}
+document.querySelectorAll("#tabbar button").forEach((b) => b.addEventListener("click", () => openTab(b)));
+
+// ---------- シンプルモードの適用/解除 ----------
+function applySimpleMode() {
+  document.body.classList.toggle("simple", simpleMode);
+  $("#today-more").open = !simpleMode;
+  $("#simple-toggle").textContent = simpleMode ? "🔧 隠している機能を表示する" : "✅「今日やる3つ」だけに戻す";
+  $("#simple-note").textContent = simpleMode
+    ? "タスク／アイデア／運用／実績・今すぐ1個・ポモドーロは、隠しているだけです(データは全部残っています)。"
+    : "全機能を表示中です。";
+  // 隠したタブを開いたままにしない
+  const active = document.querySelector("#tabbar button.active");
+  if (simpleMode && active?.hasAttribute("data-simple-hide")) openTab($('#tabbar button[data-tab="today"]'));
+}
+$("#simple-toggle").addEventListener("click", () => {
+  simpleMode = !simpleMode;
+  localStorage.setItem(SIMPLE_KEY, simpleMode ? "on" : "off");
+  applySimpleMode();
 });
+applySimpleMode();
 
 // ---------- 共通 ----------
 function esc(s) {

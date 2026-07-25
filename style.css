@@ -32,6 +32,26 @@ button.primary { background: var(--indigo); color: #fff; font-weight: 600; }
 button.ghost { background: transparent; color: var(--muted); }
 button.danger { background: #fee2e2; color: var(--danger); }
 
+/* シンプルモード(意思決定ツール版)。隠すだけ＝いつでも戻せる */
+body.simple [data-simple-hide] { display: none !important; }
+.simple-only { display: none; }
+body.simple .simple-only { display: inline; font-weight: 400; text-transform: none; letter-spacing: 0; }
+body.simple #tab-today .section-label { margin-top: 4px; }
+body.simple #top3 { margin-bottom: 14px; }
+
+/* 「ほかのタスク・ルーティン」の畳み */
+#today-more { margin-top: 22px; }
+#today-more > summary { list-style: none; cursor: pointer; font-size: .85rem; color: var(--muted);
+  padding: 10px 12px; background: transparent; border: 1px dashed #d5d7e3; border-radius: 12px; }
+#today-more > summary::-webkit-details-marker { display: none; }
+#today-more > summary::before { content: "▸ "; }
+#today-more[open] > summary::before { content: "▾ "; }
+
+/* 隠した機能を戻すスイッチ(バケットタブの下) */
+#simple-switch { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e5e7f0; }
+#simple-switch button { font-size: .8rem; padding: 8px 12px; border: 1px solid #d5d7e3; border-radius: 10px; }
+#simple-note { font-size: .75rem; margin-top: 6px; }
+
 /* レイアウト */
 #main { max-width: 560px; margin: 0 auto; padding: 16px 16px 90px; }
 h2 { font-size: 1.1rem; margin: 20px 0 10px; }
