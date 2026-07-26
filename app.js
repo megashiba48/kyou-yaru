@@ -171,6 +171,8 @@ function missedDays(r) {
 }
 
 // ルーティンの完了記録(実績カウント用)
+// ルーティンの実施記録。実績(打席数・栄光リスト・14日グラフ)には入れない
+// = 習慣は「一目で確認するだけ」にする(2026-07-26 賢大の判断)
 const routineDones = () => (state.rlogs || []).filter((l) => l.result === "done");
 
 // ---------- 「今日の候補」スコア ----------
@@ -500,13 +502,13 @@ $("#task-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = $("#task-name").value.trim();
   if (!name) return;
-  const delegate = $("#task-delegate-on").checked ? $("#task-delegate").value : null;
+  const delegate = $("#task-delegate-on").checked ? ($("#task-delegate").value.trim() || null) : null;
   const payload = {
     name,
     priority: Number($("#task-priority").value),
     minutes: $("#task-minutes").value ? Number($("#task-minutes").value) : null,
     deadline: $("#task-deadline").value || null,
-    category: $("#task-category").value || null,
+    category: $("#task-hate").checked ? "嫌い" : null,
     focus_needed: $("#task-focus").checked,
     delegate,
   };
@@ -567,7 +569,7 @@ function renderTasks() {
 
   const ul = $("#task-list");
   ul.innerHTML = "";
-  const pr = { 1: "高", 2: "中", 3: "低" };
+  const pr = { 1: "今日中", 2: "今週中", 3: "いつか" };
   let list = state.tasks;
   if (taskFilter20) list = list.filter((t) => t.minutes && t.minutes <= 20);
   if (taskCatFilter) list = list.filter((t) => t.category === taskCatFilter);
@@ -633,14 +635,11 @@ function renderDone() {
   const today = todayStr();
   const weekAgoStr = dstr(new Date(Date.now() - 6 * 86400000));
   const rmap = new Map((state.routinesAll || []).map((r) => [r.id, r.name]));
-  const rdones = routineDones();
-  const todayCount = state.done.filter((t) => doneDate(t) === today).length
-    + rdones.filter((l) => l.on_date === today).length;
-  const weekCount = state.done.filter((t) => doneDate(t) >= weekAgoStr).length
-    + rdones.filter((l) => l.on_date >= weekAgoStr).length;
-  $("#done-summary").textContent = (state.done.length || rdones.length)
-    ? `今日 ${todayCount}件 / 直近7日 ${weekCount}件 / 記録上 ${state.done.length + rdones.length}件(ルーティン含む)`
-    : "まだありません。タスクやルーティンを完了するとここに貯まります。";
+  const todayCount = state.done.filter((t) => doneDate(t) === today).length;
+  const weekCount = state.done.filter((t) => doneDate(t) >= weekAgoStr).length;
+  $("#done-summary").textContent = state.done.length
+    ? `今日 ${todayCount}件 / 直近7日 ${weekCount}件 / 記録上 ${state.done.length}件`
+    : "まだありません。タスクを完了するとここに貯まります。";
 
   const box = $("#done-list");
   box.innerHTML = "";
@@ -694,6 +693,28 @@ $("#routine-form").addEventListener("submit", async (e) => {
   await refresh();
 });
 
+// 委任先の候補。過去に使った名前が自動で貯まる(新しい名前はそのまま入力すれば増える)
+function renderDelegateNames() {
+  const used = [...state.tasks, ...(state.done || [])].map((t) => t.delegate).filter(Boolean);
+  const names = [...new Set([...used, "近藤", "榊原", "竹市"])];
+  $("#delegate-names").innerHTML = names.map((n) => `<option value="${esc(n)}">`).join("");
+}
+
+// 直近7日の実施を一目で(●=やった ◐=休んだ ○=予定日なのに記録なし ・=予定日でない)
+// 実績には数えない。習慣は「見て分かる」だけでいい(2026-07-26 賢大の判断)
+function habitStrip(r) {
+  const cells = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000);
+    if (!r.days.includes(d.getDay())) { cells.push('<span class="hb none">・</span>'); continue; }
+    const log = (state.rlogs || []).find((l) => l.routine_id === r.id && l.on_date === dstr(d));
+    if (!log) cells.push('<span class="hb miss">○</span>');
+    else if (log.result === "done") cells.push('<span class="hb done">●</span>');
+    else cells.push('<span class="hb rest">◐</span>');
+  }
+  return `<span class="habit" title="直近7日">${cells.join("")}</span>`;
+}
+
 function renderRoutines() {
   const ul = $("#routine-list");
   ul.innerHTML = "";
@@ -704,6 +725,7 @@ function renderRoutines() {
     const todayLog = state.logs.find((l) => l.routine_id === r.id);
     const status = todayLog ? (todayLog.result === "done" ? "・今日✅" : "・今日😴休み") : "";
     li.innerHTML = `<span class="name">${esc(r.name)}${missed >= 2 ? `<span class="warn"> ⚠${missed}日放置</span>` : ""}</span>
+      ${habitStrip(r)}
       <span class="meta">${daysTxt}${r.minutes ? "・" + r.minutes + "分" : ""}${status}</span>
       <button class="danger del-b">削除</button>`;
     li.querySelector(".del-b").addEventListener("click", async () => {
@@ -948,11 +970,10 @@ function renderAtBat() {
   const days = new Set();
   for (const t of state.done) if (t.done_at && t.done_at.slice(0, 10) >= ws) days.add(t.done_at.slice(0, 10));
   for (const f of (state.focus || [])) if (f.on_date >= ws) days.add(f.on_date);
-  for (const l of routineDones()) if (l.on_date >= ws) days.add(l.on_date);
   $("#atbat").innerHTML = `<div class="atbat-card">
     <div class="ab-label">今週の打席数</div>
     <div class="ab-num">${days.size}<span>打席</span></div>
-    <div class="ab-note muted">1日1つでも完了(タスク/ルーティン) or ポモ1セットで打席+1。途切れてもリセットしません。</div>
+    <div class="ab-note muted">1日1つでもタスクを完了すれば打席+1。途切れてもリセットしません。（ルーティンは数えません）</div>
   </div>`;
 }
 
@@ -960,7 +981,6 @@ function renderActivity14() {
   const counts = {};
   for (const t of state.done) if (t.done_at) { const ds = t.done_at.slice(0, 10); counts[ds] = (counts[ds] || 0) + 1; }
   for (const f of (state.focus || [])) counts[f.on_date] = (counts[f.on_date] || 0) + 1;
-  for (const l of routineDones()) counts[l.on_date] = (counts[l.on_date] || 0) + 1;
   const days = [];
   let max = 1;
   for (let i = 13; i >= 0; i--) {
@@ -978,8 +998,6 @@ function renderActivity14() {
 function renderGlory() {
   const tally = {};
   for (const t of state.done) { const c = t.category || "その他"; tally[c] = (tally[c] || 0) + 1; }
-  const rd = routineDones().length;
-  if (rd) tally["ルーティン"] = (tally["ルーティン"] || 0) + rd;
   const entries = Object.entries(tally).sort((a, b) => b[1] - a[1]);
   const box = $("#glory");
   if (!entries.length) { box.innerHTML = `<p class="muted">完了タスクが貯まると、カテゴリ別にここへ積み上がります。</p>`; return; }
@@ -1042,7 +1060,7 @@ function openTaskEditor(opts = {}) {
   $("#te-title").textContent = opts.task ? "タスクを編集" : "タスクにする";
   $("#te-name").value = opts.name ?? t.name ?? "";
   $("#te-priority").value = String(t.priority || 2);
-  $("#te-category").value = t.category || "";
+  $("#te-hate").checked = t.category === "嫌い";
   $("#te-deadline").value = t.deadline || "";
   $("#te-minutes").value = t.minutes || "";
   $("#te-focus").checked = !!t.focus_needed;
@@ -1069,11 +1087,11 @@ $("#te-save").addEventListener("click", async () => {
   const fields = {
     name,
     priority: Number($("#te-priority").value),
-    category: $("#te-category").value || null,
+    category: $("#te-hate").checked ? "嫌い" : null,
     deadline: $("#te-deadline").value || null,
     minutes: $("#te-minutes").value ? Number($("#te-minutes").value) : null,
     focus_needed: $("#te-focus").checked,
-    delegate: $("#te-delegate-on").checked ? $("#te-delegate").value : null,
+    delegate: $("#te-delegate-on").checked ? ($("#te-delegate").value.trim() || null) : null,
   };
   if (state.hasDelegatedAt) {
     const before = teCtx.task?.delegate || null;
@@ -1083,7 +1101,7 @@ $("#te-save").addEventListener("click", async () => {
   if (teCtx.task) {
     await sb.from("tasks").update(fields).eq("id", teCtx.task.id);
   } else {
-    await sb.from("tasks").insert({ ...fields, source: teCtx.source || "braindump" });
+    await sb.from("tasks").insert({ ...fields, source: teCtx.source || "manual" });
     if (teCtx.onSaved) await teCtx.onSaved();
   }
   closeTaskEditor();
@@ -1097,31 +1115,7 @@ $("#te-delete").addEventListener("click", async () => {
   await refresh();
 });
 
-// ---------- アイデア:ブレインダンプ ----------
-$("#braindump").value = localStorage.getItem("braindump") || "";
-$("#braindump").addEventListener("input", () => localStorage.setItem("braindump", $("#braindump").value));
-$("#bd-tasks").addEventListener("click", () => {
-  const lines = $("#braindump").value.split("\n").map((l) => l.trim()).filter((l) => l.length >= 2);
-  const box = $("#bd-picker");
-  if (!lines.length) { box.innerHTML = `<p class="muted">先にアイデアを書いてください。</p>`; return; }
-  box.innerHTML = `<p class="muted">行をタップ→優先度・いつやる等を決めてタスク化(タスク化した行はダンプから消えます):</p>` +
-    lines.map((l, i) => `<button type="button" class="bd-line" data-i="${i}">${esc(l)}</button>`).join("");
-  box.querySelectorAll(".bd-line").forEach((b) => {
-    b.addEventListener("click", () => {
-      const line = lines[Number(b.dataset.i)];
-      openTaskEditor({
-        name: line.slice(0, 100),
-        source: "braindump",
-        onSaved: async () => {
-          const remaining = $("#braindump").value.split("\n").filter((l) => l.trim() !== line);
-          $("#braindump").value = remaining.join("\n");
-          localStorage.setItem("braindump", $("#braindump").value);
-          b.remove();
-        },
-      });
-    });
-  });
-});
+// ブレインダンプは撤去(2026-07-26 賢大「紙に書くから要らない」)。Obsidian受信箱は残置。
 
 // ---------- タブ切り替え ----------
 function openTab(btn) {
@@ -1161,6 +1155,7 @@ async function refresh() {
   renderToday();
   renderTasks();
   renderRoutines();
+  renderDelegateNames();
   renderResults();
   await Promise.all([loadBucket(), loadInbox()]);
 }

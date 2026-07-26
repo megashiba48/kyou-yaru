@@ -87,18 +87,9 @@
         <input id="task-name" placeholder="タスクを追加(例:発送準備)" required>
         <div class="row">
           <select id="task-priority">
-            <option value="1">優先度:高</option>
-            <option value="2" selected>優先度:中</option>
-            <option value="3">優先度:低</option>
-          </select>
-          <select id="task-category">
-            <option value="">カテゴリなし</option>
-            <option value="営業">営業</option>
-            <option value="採用">採用</option>
-            <option value="配信準備">配信準備</option>
-            <option value="事務">事務</option>
-            <option value="連絡">連絡</option>
-            <option value="嫌い">嫌い(やりたくない)</option>
+            <option value="1">今日中にやる</option>
+            <option value="2" selected>今週中にやる</option>
+            <option value="3">いつかやる</option>
           </select>
           <input id="task-deadline" type="date" title="締切">
         </div>
@@ -113,12 +104,9 @@
         </div>
         <div class="row">
           <label class="chk"><input type="checkbox" id="task-focus"> 🎯集中力が必要</label>
+          <label class="chk"><input type="checkbox" id="task-hate"> 😤嫌い(やりたくない)</label>
           <label class="chk"><input type="checkbox" id="task-delegate-on"> 🤝委任する</label>
-          <select id="task-delegate" class="hidden">
-            <option value="近藤">近藤</option>
-            <option value="榊原">榊原</option>
-            <option value="竹市">竹市</option>
-          </select>
+          <input id="task-delegate" class="hidden" list="delegate-names" placeholder="誰に頼む?" style="width:120px">
           <button class="primary" type="submit">追加</button>
         </div>
       </form>
@@ -180,13 +168,7 @@
     <!-- アイデアタブ(ブレインダンプ + Obsidian受信箱) -->
     <section id="tab-inbox" class="tab hidden">
       <h2>アイデア</h2>
-      <p class="section-label">ブレインダンプ(思いつくまま吐き出す)</p>
-      <textarea id="braindump" rows="6" placeholder="頭の中を全部ここへ。1行1アイデアで書くと、下でタスクに仕分けしやすい。"></textarea>
-      <div class="row">
-        <button id="bd-tasks" class="primary">1行ずつタスクに仕分け</button>
-        <span id="bd-msg" class="muted">書いた内容は自動保存されます</span>
-      </div>
-      <div id="bd-picker"></div>
+      <!-- ブレインダンプは撤去(2026-07-26 賢大「紙に書くから要らない」) -->
 
       <p class="section-label">Obsidian受信箱</p>
       <p class="muted">Obsidianに書いたアイデアが1つずつ届きます。タスクにするか、いらなければアーカイブ。処理したものは二度と出ません。</p>
@@ -232,7 +214,7 @@
         <button id="simple-toggle" type="button" class="ghost"></button>
         <p id="simple-note" class="muted"></p>
       </div>
-      <p class="muted">app v6.2</p>
+      <p class="muted">app v6.3</p>
     </section>
   </main>
 
@@ -252,19 +234,11 @@
     <input id="te-name" placeholder="タスク名" required>
     <div class="row">
       <select id="te-priority">
-        <option value="1">優先度:高</option>
-        <option value="2" selected>優先度:中</option>
-        <option value="3">優先度:低</option>
+        <option value="1">今日中にやる</option>
+        <option value="2" selected>今週中にやる</option>
+        <option value="3">いつかやる</option>
       </select>
-      <select id="te-category">
-        <option value="">カテゴリなし</option>
-        <option value="営業">営業</option>
-        <option value="採用">採用</option>
-        <option value="配信準備">配信準備</option>
-        <option value="事務">事務</option>
-        <option value="連絡">連絡</option>
-        <option value="嫌い">嫌い(やりたくない)</option>
-      </select>
+      <label class="chk"><input type="checkbox" id="te-hate"> 😤嫌い(やりたくない)</label>
     </div>
     <div class="row">
       <label class="date-label">いつやる<input id="te-deadline" type="date"></label>
@@ -281,11 +255,7 @@
     <div class="row">
       <label class="chk"><input type="checkbox" id="te-focus"> 🎯集中力が必要</label>
       <label class="chk"><input type="checkbox" id="te-delegate-on"> 🤝委任する</label>
-      <select id="te-delegate" class="hidden">
-        <option value="近藤">近藤</option>
-        <option value="榊原">榊原</option>
-        <option value="竹市">竹市</option>
-      </select>
+      <input id="te-delegate" class="hidden" list="delegate-names" placeholder="誰に頼む?" style="width:120px">
     </div>
     <div class="row te-actions">
       <button id="te-save" class="primary" type="button">保存</button>
@@ -294,6 +264,8 @@
     </div>
   </div>
 </div>
+
+<datalist id="delegate-names"></datalist>
 
 <script src="config.js"></script>
 <script type="module" src="app.js"></script>
