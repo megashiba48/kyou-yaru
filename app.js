@@ -203,7 +203,6 @@ function todayPool() {
   const t3 = getTop3();
   const items = [];
   for (const t of state.tasks) {
-    if (t.delegate) continue; // 委任中=自分がやるものではなく待つもの → 運用タブの「返事待ち」棚へ
     items.push({ kind: "task", id: t.id, name: t.name, minutes: t.minutes,
       deadline: t.deadline, priority: t.priority, postpone_count: t.postpone_count,
       top3: t3.includes(t.id) });
@@ -261,7 +260,7 @@ async function completeItem(i) {
     await sb.from("routine_log").insert({ routine_id: i.id, on_date: todayStr(), result: "done" });
   }
   setTop3(getTop3().filter((x) => x !== i.id)); // ルーティンも完了したらTOP3枠を空ける
-  if (nowOneId === i.id) { pomoEarlyFinish(i.id); nowOneId = null; }
+  if (nowOneId === i.id) nowOneId = null;
   await refresh();
 }
 
@@ -285,10 +284,8 @@ function renderToday() {
   if (!nowOneId || !pool.some((i) => i.id === nowOneId)) pickNowOne(pool);
   renderNowOne(pool);
   renderTop3(pool);
-  renderDelegateNudge();
   renderBlank();
   renderRest(pool);
-  updatePomoTask(pool);
 }
 
 function renderTop3(pool) {
@@ -406,76 +403,31 @@ function renderTodayRoutines(routines, makeLi) {
   }
 }
 
-// ---------- 委任=返事待ち ----------
-// 委任タスクは自分の実行リストから外し、運用タブの「返事待ち」棚で待つ。
-// 3日動きがなければ今日タブに催促ナッジを出す。
-const NUDGE_DAYS = 3;
-const delegatedTasks = () => state.tasks.filter((t) => t.delegate);
-const waitDays = (t) => Math.floor((Date.now() - new Date(t.delegated_at || t.created_at)) / 86400000);
-const nudgeHideKey = () => `nudgeHide:${todayStr()}`;
-
-async function touchDelegated(t) {
-  // 催促した=待ち日数の起点をリセット(delegated_at列がまだ無いDBでは今日だけ非表示)
-  if (state.hasDelegatedAt) await sb.from("tasks").update({ delegated_at: new Date().toISOString() }).eq("id", t.id);
-  else localStorage.setItem(nudgeHideKey(), JSON.stringify([...lsGet(nudgeHideKey()), t.id]));
-  await refresh();
-}
-
-function renderDelegateNudge() {
-  const box = $("#delegate-nudge");
-  const hidden = lsGet(nudgeHideKey());
-  const stale = delegatedTasks().filter((t) => waitDays(t) >= NUDGE_DAYS && !hidden.includes(t.id));
-  box.innerHTML = "";
-  for (const t of stale) {
-    const el = document.createElement("div");
-    el.className = "dg-nudge";
-    el.innerHTML = `<span class="name">🤝 ${esc(t.delegate)}さんに委任して${waitDays(t)}日。「${esc(t.name)}」動いてる?</span>
-      <button class="nd-ping">催促した</button><button class="nd-hide ghost">今日は隠す</button>`;
-    el.querySelector(".nd-ping").addEventListener("click", () => touchDelegated(t));
-    el.querySelector(".nd-hide").addEventListener("click", () => {
-      localStorage.setItem(nudgeHideKey(), JSON.stringify([...lsGet(nudgeHideKey()), t.id]));
-      renderDelegateNudge();
-    });
-    box.appendChild(el);
-  }
-}
-
-function renderDelegated() {
-  const box = $("#delegated-list");
-  if (!box) return;
-  const list = delegatedTasks();
-  if (!list.length) { box.innerHTML = `<p class="muted">委任中のタスクはありません。タスク追加時に「🤝委任する」を付けるとここに入ります。</p>`; return; }
-  box.innerHTML = "";
-  for (const t of list) {
-    const d = waitDays(t);
-    const el = document.createElement("div");
-    el.className = "dg-row";
-    el.style.setProperty("--tag", DELEGATE_COLORS[t.delegate] || "#888");
-    el.innerHTML = `<span class="name">${esc(t.name)}</span>
-      <span class="meta">🤝${esc(t.delegate)}・待ち${d}日${d >= NUDGE_DAYS ? ' <span class="warn">⚠</span>' : ""}</span>
-      <button class="dg-done">完了</button><button class="dg-back">引き取る</button>`;
-    el.querySelector(".dg-done").addEventListener("click", async () => {
-      await sb.from("tasks").update({ status: "done", done_at: new Date().toISOString() }).eq("id", t.id);
-      await refresh();
-    });
-    el.querySelector(".dg-back").addEventListener("click", async () => {
-      const fields = { delegate: null };
-      if (state.hasDelegatedAt) fields.delegated_at = null;
-      await sb.from("tasks").update(fields).eq("id", t.id);
-      await refresh();
-    });
-    box.appendChild(el);
-  }
-}
-
 // ---------- 3秒クイック追加(名前だけで即入れる) ----------
+// 入力したものは、空き枠があればそのまま「今日やる3つ」に入る(v6.2)。
+// 埋まっている時だけ控えに回して、その旨を伝える。「追加したのに何も起きない」を無くすのが目的。
+function qaMsg(t) {
+  const el = $("#qa-msg");
+  if (!el) return;
+  el.textContent = t;
+  if (t) setTimeout(() => { if (el.textContent === t) el.textContent = ""; }, 4000);
+}
 $("#quick-add").addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = $("#qa-name").value.trim();
   if (!name) return;
   $("#qa-name").value = "";
-  await sb.from("tasks").insert({ name, priority: 2, source: "quick" });
-  await refresh();
+  const { data, error } = await sb.from("tasks")
+    .insert({ name, priority: 2, source: "quick" }).select("id").single();
+  if (error || !data) { qaMsg("追加できませんでした。通信を確認してください。"); return; }
+  await refresh(); // 先に読み直す(day_stateを最新にしてからTOP3を触る)
+  if (getTop3().length < 3) {
+    setTop3([...getTop3(), data.id]);
+    renderToday();
+    qaMsg("今日やる3つに入れました ✅");
+  } else {
+    qaMsg("今日やる3つは埋まっています。控えに入れました。");
+  }
 });
 
 // 余白ブロック(何もしない時間・端末内保存)
@@ -508,80 +460,13 @@ function renderBlank() {
   });
 }
 
-// ---------- ポモドーロ ----------
-const WORK_SEC = 25 * 60, BREAK_SEC = 5 * 60;
-let pomo = { phase: "work", remaining: WORK_SEC, running: false, endsAt: 0 };
-
-// タイマー状態を保存(アプリを閉じても25分が消えないように)
-const POMO_STATE_KEY = "pomoState";
-function savePomoState() {
-  localStorage.setItem(POMO_STATE_KEY, JSON.stringify({
-    phase: pomo.phase, remaining: pomo.remaining, running: pomo.running, endsAt: pomo.endsAt,
-  }));
-}
-function restorePomoState() {
-  try {
-    const s = JSON.parse(localStorage.getItem(POMO_STATE_KEY) || "null");
-    if (!s) return;
-    pomo = {
-      phase: s.phase === "break" ? "break" : "work",
-      remaining: Number(s.remaining) || WORK_SEC,
-      running: !!s.running,
-      endsAt: Number(s.endsAt) || 0,
-    };
-    if (pomo.running) {
-      const left = Math.round((pomo.endsAt - Date.now()) / 1000);
-      if (left <= 0) { pomoAdvance(true); return; } // 留守中に終了していた→停止して評価待ち
-      pomo.remaining = left;
-    }
-  } catch (e) { pomo = { phase: "work", remaining: WORK_SEC, running: false, endsAt: 0 }; }
-}
-
-// 終了通知＋バイブ(画面を見ていなくても気づけるように)
-function notifyPomo(title, body) {
-  try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) { /* 非対応でよい */ }
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const opts = { body, icon: "icon-192.png", tag: "pomo", vibrate: [200, 100, 200] };
-  navigator.serviceWorker?.getRegistration()
-    .then((reg) => reg && reg.showNotification ? reg.showNotification(title, opts) : new Notification(title, opts))
-    .catch(() => { try { new Notification(title, opts); } catch (e) { /* 無視 */ } });
-}
-
-const pomoKey = () => `pomo:${todayStr()}`;
-const pomoCount = () => Number(localStorage.getItem(pomoKey()) || 0);
-const pomoInc = () => localStorage.setItem(pomoKey(), pomoCount() + 1);
+// ---------- ポモドーロは撤去(v6.2) ----------
+// 賢大の判断:「25分作業5分休憩×4セットが1作業のMAXだと分かればいい」
+// → カウントダウンは端末標準のタイマーに任せ、知識だけ今日タブに1行置く。
+// fmtSec は「30分だけ集中」タイマーが使うので残置。
 const fmtSec = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
-function updatePomo() {
-  const el = $("#pomodoro");
-  if (!el) return;
-  el.classList.toggle("work", pomo.phase === "work");
-  el.classList.toggle("break", pomo.phase === "break");
-  $("#pomo-phase").textContent = pomo.phase === "work" ? "作業" : "休憩";
-  $("#pomo-time").textContent = fmtSec(pomo.remaining);
-  $("#pomo-toggle").textContent = pomo.running ? "一時停止" : (pomo.phase === "break" ? "休憩を開始" : "開始");
-  $("#pomo-count").textContent = `今日 ${pomoCount()}セット`;
-  savePomoState();
-}
-
-function updatePomoTask(pool) {
-  const i = nowOneId && pool ? byId(pool, nowOneId) : null;
-  const el = $("#pomo-task");
-  if (!el) return;
-  if (!i) { el.textContent = "紐付けなし(今すぐ1個に自動連動)"; return; }
-  let txt = "▶ " + i.name;
-  // 25分より長い見積タスクは「何セットで終わるか」を可視化
-  if (i.minutes && i.minutes > WORK_SEC / 60) {
-    const need = Math.ceil(i.minutes / (WORK_SEC / 60));
-    const done = (state.focus || []).filter((f) => f.on_date === todayStr() && f.task_id === i.id).length;
-    const left = Math.max(0, need - done);
-    txt += ` ｜ 見積${i.minutes}分=約${need}セット（今日 ✅${done}/${need}${left ? `・あと${left}` : "・目安クリア"}）`;
-  }
-  el.textContent = txt;
-}
-
 function beep() {
-  if (localStorage.getItem("pomoSound") === "off") return;
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const o = ctx.createOscillator(), g = ctx.createGain();
@@ -590,74 +475,6 @@ function beep() {
     o.start(); o.stop(ctx.currentTime + 0.25);
   } catch (e) { /* 無音でよい */ }
 }
-
-// 紐付きタスクを25分より早く完了した時も1セット扱い(セット数と🔥😐😴評価を取りこぼさない)
-function pomoEarlyFinish(taskId) {
-  if (pomo.phase !== "work" || !pomo.running) return;
-  beep();
-  pomo.phase = "break";
-  pomo.remaining = BREAK_SEC;
-  pomo.running = false;
-  pomo.endsAt = 0;
-  pomoInc();
-  logFocusSet(taskId);
-  updatePomo();
-}
-
-function pomoAdvance(natural) {
-  const wasWork = pomo.phase === "work";
-  if (natural) {
-    beep();
-    notifyPomo(
-      wasWork ? "🍅 25分おつかれさま！" : "☕ 休憩おわり",
-      wasWork ? "集中度を🔥😐😴で記録して、休憩へどうぞ" : "「開始」を押して次の作業へ",
-    );
-    // 自然終了は自動で次フェーズへ流さず、いったん停止して待つ
-    // (作業→休憩に勝手に進んで集中度評価を押し損ねる事故を防ぐ)
-    pomo.phase = wasWork ? "break" : "work";
-    pomo.remaining = pomo.phase === "work" ? WORK_SEC : BREAK_SEC;
-    pomo.running = false;
-    pomo.endsAt = 0;
-    if (wasWork) { pomoInc(); logFocusSet(); } // 評価UIを表示(次の休憩は手動開始)
-    updatePomo();
-    return;
-  }
-  // スキップ(手動)は従来どおり即切替
-  pomo.phase = wasWork ? "break" : "work";
-  pomo.remaining = pomo.phase === "work" ? WORK_SEC : BREAK_SEC;
-  pomo.endsAt = pomo.running ? Date.now() + pomo.remaining * 1000 : 0;
-  updatePomo();
-}
-
-setInterval(() => {
-  if (!pomo.running) return;
-  const left = Math.max(0, Math.round((pomo.endsAt - Date.now()) / 1000));
-  pomo.remaining = left;
-  if (left <= 0) pomoAdvance(true);
-  else updatePomo();
-}, 500);
-
-$("#pomo-toggle").addEventListener("click", () => {
-  if (pomo.running) {
-    pomo.remaining = Math.max(0, Math.round((pomo.endsAt - Date.now()) / 1000));
-    pomo.running = false;
-  } else {
-    pomo.endsAt = Date.now() + pomo.remaining * 1000;
-    pomo.running = true;
-    // 初回の開始時に通知許可を求める(終了を画面オフでも知らせるため)
-    if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
-  }
-  updatePomo();
-});
-$("#pomo-skip").addEventListener("click", () => pomoAdvance(false));
-$("#pomo-sound").addEventListener("click", () => {
-  const off = localStorage.getItem("pomoSound") === "off";
-  localStorage.setItem("pomoSound", off ? "on" : "off");
-  $("#pomo-sound").textContent = off ? "🔔" : "🔕";
-});
-if (localStorage.getItem("pomoSound") === "off") $("#pomo-sound").textContent = "🔕";
-restorePomoState();
-updatePomo();
 
 // ---------- タスクタブ ----------
 const DELEGATE_COLORS = { "近藤": "#0e9f6e", "榊原": "#d97706", "竹市": "#7c3aed" };
@@ -1048,42 +865,6 @@ function renderInbox() {
 }
 
 // ---------- 実績タブ ----------
-let lastFocusId = null;
-function logFocusSet(taskId) {
-  // 早期完了はnowOneIdが直後にクリアされるので、呼び出し時点のタスクIDを引数で受け取る
-  const tid = taskId ?? nowOneId ?? null;
-  sb.auth.getUser().then(({ data }) => {
-    if (!data?.user) return;
-    sb.from("focus_log").insert({ user_id: data.user.id, on_date: todayStr(), task_id: tid })
-      .select().single().then(({ data: row }) => {
-        if (row) {
-          lastFocusId = row.id;
-          (state.focus = state.focus || []).push(row); // 進捗表示に即反映
-          updatePomoTask(todayPool());
-          showPomoRate();
-        }
-      });
-  });
-}
-
-// セット完了直後の1タップ集中度評価(3=🔥 2=😐 1=😴)
-function showPomoRate() {
-  const box = $("#pomo-rate");
-  if (!box) return;
-  box.innerHTML = `<span class="pr-q">今のセット、集中できた?</span>
-    <button type="button" data-r="3">🔥</button><button type="button" data-r="2">😐</button><button type="button" data-r="1">😴</button>`;
-  box.querySelectorAll("button[data-r]").forEach((b) => b.addEventListener("click", async () => {
-    const id = lastFocusId;
-    lastFocusId = null;
-    if (!id) { box.innerHTML = ""; return; }
-    const { error } = await sb.from("focus_log").update({ rating: Number(b.dataset.r) }).eq("id", id);
-    box.innerHTML = error
-      ? `<span class="muted">記録できませんでした(${esc(error.message)})</span>`
-      : `<span class="muted">記録しました ✅</span>`;
-    setTimeout(() => { box.innerHTML = ""; }, 2500);
-  }));
-}
-
 // 実測の集中時間帯(評価30件以上・1時間あたり3件以上で判定)
 const MEASURE_MIN = 30;
 function focusHourStats() {
@@ -1342,86 +1123,6 @@ $("#bd-tasks").addEventListener("click", () => {
   });
 });
 
-// ---------- 運用:連絡タイム + 週一人会議 ----------
-const getSlots = () => JSON.parse(localStorage.getItem("contactSlots") || "[]");
-const setSlots = (a) => localStorage.setItem("contactSlots", JSON.stringify(a.slice(0, 2)));
-let ctFilterOn = false;
-
-function nowHM() {
-  const n = new Date();
-  return `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
-}
-function nowInSlot() {
-  const hm = nowHM();
-  return getSlots().some((s) => s.start <= hm && hm <= s.end);
-}
-
-$("#ct-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  const start = $("#ct-start").value, end = $("#ct-end").value;
-  if (!start || !end) return;
-  const a = getSlots();
-  if (a.length >= 2) { alert("連絡タイムは1日2枠までがおすすめです。"); return; }
-  a.push({ start, end });
-  a.sort((x, y) => x.start.localeCompare(y.start));
-  setSlots(a);
-  e.target.reset();
-  renderOps();
-});
-$("#ct-filter").addEventListener("click", () => {
-  ctFilterOn = !ctFilterOn;
-  $("#ct-filter").classList.toggle("on", ctFilterOn);
-  renderContact();
-});
-
-function renderOps() { renderDelegated(); renderContact(); renderSolo(); }
-
-function renderContact() {
-  const inSlot = nowInSlot();
-  $("#contact-status").innerHTML = inSlot
-    ? `<div class="ct-on">🟢 連絡タイムです。まとめて返信しましょう。</div>`
-    : `<div class="ct-off">連絡は指定時間にまとめて。今は連絡タスクを目立たせません。</div>`;
-
-  const slots = getSlots();
-  const cs = $("#contact-slots");
-  cs.innerHTML = slots.length
-    ? slots.map((s, i) => `<div class="ct-slot">🕐 ${s.start}–${s.end}<button class="del-slot ghost" data-i="${i}">削除</button></div>`).join("")
-    : `<p class="muted">まだ枠がありません。1日1〜2枠がおすすめ(例:12:00–12:30 / 20:00–20:20)。</p>`;
-  cs.querySelectorAll(".del-slot").forEach((b) => b.addEventListener("click", () => {
-    const a = getSlots(); a.splice(Number(b.dataset.i), 1); setSlots(a); renderOps();
-  }));
-
-  const box = $("#ct-list");
-  if (!(ctFilterOn || inSlot)) { box.innerHTML = ""; return; }
-  const tasks = state.tasks.filter((t) => t.category === "連絡");
-  box.innerHTML = tasks.length
-    ? `<ul class="list">` + tasks.map((t) => `<li data-id="${t.id}"><span class="name">📮 ${esc(t.name)}</span><button class="done-c">完了</button></li>`).join("") + `</ul>`
-    : `<p class="muted">連絡カテゴリのタスクはありません。</p>`;
-  box.querySelectorAll(".done-c").forEach((b) => b.addEventListener("click", async () => {
-    await sb.from("tasks").update({ status: "done", done_at: new Date().toISOString() }).eq("id", b.closest("li").dataset.id);
-    await refresh();
-  }));
-}
-
-const soloKey = () => `solo:${weekStartStr()}`;
-const getSolo = () => JSON.parse(localStorage.getItem(soloKey()) || '{"when":"","fun":""}');
-function renderSolo() {
-  const s = getSolo();
-  $("#solo-meeting").innerHTML = `
-    <div class="solo-card">
-      <p class="muted">今週の一人会議(1人で考える時間)、いつやる?</p>
-      <input id="solo-when" placeholder="例:土曜の朝、カフェで" value="${esc(s.when)}">
-      <p class="muted">今週やりたい楽しいこと</p>
-      <input id="solo-fun" placeholder="例:サウナ / 映画" value="${esc(s.fun)}">
-      <div class="row"><button id="solo-save" class="primary">保存</button><span id="solo-msg" class="muted"></span></div>
-    </div>`;
-  $("#solo-save").addEventListener("click", () => {
-    localStorage.setItem(soloKey(), JSON.stringify({ when: $("#solo-when").value, fun: $("#solo-fun").value }));
-    $("#solo-msg").textContent = "保存しました ✅";
-    setTimeout(() => { const m = $("#solo-msg"); if (m) m.textContent = ""; }, 2500);
-  });
-}
-
 // ---------- タブ切り替え ----------
 function openTab(btn) {
   document.querySelectorAll("#tabbar button").forEach((x) => x.classList.toggle("active", x === btn));
@@ -1461,7 +1162,6 @@ async function refresh() {
   renderTasks();
   renderRoutines();
   renderResults();
-  renderOps();
   await Promise.all([loadBucket(), loadInbox()]);
 }
 

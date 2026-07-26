@@ -51,34 +51,23 @@
       <p class="section-label">今日やる3つ<span class="simple-only">(決めたら閉じてOK)</span></p>
       <div id="top3"></div>
 
-      <!-- 3秒クイック追加(名前だけで即入れる。詳細は後から編集) -->
+      <!-- 3秒クイック追加。空き枠があれば、そのまま上の「今日やる3つ」に入る -->
       <form id="quick-add">
-        <input id="qa-name" placeholder="＋ 思いついたら即追加(名前だけでOK)" autocomplete="off" enterkeyhint="done">
+        <input id="qa-name" placeholder="＋ 今日やることを追加(名前だけでOK)" autocomplete="off" enterkeyhint="done">
       </form>
+      <p id="qa-msg" class="muted"></p>
 
-      <!-- 主役から降ろした一式(可逆・データもコードも消していない) -->
+      <!-- ポモドーロは撤去。知識だけ残す(タイマーは端末標準を使う) -->
+      <p class="pomo-note">⏱ 25分作業＋5分休憩 ×4セットが、1つの作業のMAX。</p>
+
+      <!-- 主役から降ろした一式(可逆・データは消していない) -->
       <div data-simple-hide>
         <p class="section-label">今すぐやる1個</p>
         <div id="now-wrap">
           <div id="now-one"></div>
-          <!-- ポモドーロ(上のカードと一体・今すぐ1個に自動連動) -->
-          <div id="pomodoro" class="work">
-            <div class="pomo-row">
-              <span id="pomo-phase">作業</span>
-              <span id="pomo-time">25:00</span>
-              <span id="pomo-count" class="muted"></span>
-              <span class="sp"></span>
-              <button id="pomo-toggle" class="primary">開始</button>
-              <button id="pomo-skip">スキップ</button>
-              <button id="pomo-sound" class="ghost">🔔</button>
-            </div>
-            <div id="pomo-task" class="muted">紐付けなし</div>
-            <div id="pomo-rate"></div>
-          </div>
         </div>
       </div>
 
-      <div id="delegate-nudge" data-simple-hide></div>
       <div id="blank-block" data-simple-hide></div>
 
       <!-- 残りは畳む(見たい時だけ開く) -->
@@ -204,28 +193,7 @@
       <div id="inbox-list"></div>
     </section>
 
-    <!-- 運用タブ(連絡タイム + 週一人会議) -->
-    <section id="tab-ops" class="tab hidden">
-      <h2>運用</h2>
-
-      <p class="section-label">返事待ち(委任中のタスク)</p>
-      <div id="delegated-list"></div>
-
-      <p class="section-label">連絡タイム(まとめて処理)</p>
-      <div id="contact-status"></div>
-      <div id="contact-slots"></div>
-      <form id="ct-form" class="row">
-        <input id="ct-start" type="time" required>
-        <span>–</span>
-        <input id="ct-end" type="time" required>
-        <button class="primary" type="submit">枠を追加</button>
-      </form>
-      <button id="ct-filter" type="button" class="chip">📮 連絡カテゴリだけ表示</button>
-      <div id="ct-list"></div>
-
-      <p class="section-label">週一人会議</p>
-      <div id="solo-meeting"></div>
-    </section>
+    <!-- 運用タブは撤去(2026-07-26 賢大の判断「必要ない」)。DBのデータは消していない -->
 
     <!-- バケットタブ -->
     <section id="tab-bucket" class="tab hidden">
@@ -264,7 +232,7 @@
         <button id="simple-toggle" type="button" class="ghost"></button>
         <p id="simple-note" class="muted"></p>
       </div>
-      <p class="muted">app v6.1</p>
+      <p class="muted">app v6.2</p>
     </section>
   </main>
 
@@ -272,7 +240,6 @@
     <button data-tab="today" class="active">📌<span>今日</span></button>
     <button data-tab="tasks" data-simple-hide>✅<span>タスク</span></button>
     <button data-tab="inbox" data-simple-hide>💡<span>アイデア</span></button>
-    <button data-tab="ops" data-simple-hide>🔔<span>運用</span></button>
     <button data-tab="results" data-simple-hide>🏆<span>実績</span></button>
     <button data-tab="bucket">🪣<span>バケット</span></button>
   </nav>
