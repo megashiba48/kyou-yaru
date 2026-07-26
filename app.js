@@ -153,6 +153,9 @@ async function loadAll() {
     focus: f.data || [], goals: g.data || [] };
   // delegated_at列がまだ無いDBでも壊れないように、列の有無を実データから判定
   state.hasDelegatedAt = [...state.tasks, ...state.done].some((x) => "delegated_at" in x);
+  // goals.target_value/unit の有無を実際に問い合わせて判定(行が0件でも正しく判定できる)
+  const probe = await sb.from("goals").select("target_value").limit(1);
+  state.hasGoalTarget = !probe.error;
 }
 
 // ルーティンの放置日数(昨日から遡り、予定曜日なのに記録がない日を数える。記録=完了/休みどちらでも可)
@@ -569,7 +572,7 @@ function renderTasks() {
 
   const ul = $("#task-list");
   ul.innerHTML = "";
-  const pr = { 1: "今日中", 2: "今週中", 3: "いつか" };
+  const pr = { 1: "🔥緊急", 2: "前に進む", 3: "影響なし" };
   let list = state.tasks;
   if (taskFilter20) list = list.filter((t) => t.minutes && t.minutes <= 20);
   if (taskCatFilter) list = list.filter((t) => t.category === taskCatFilter);
@@ -923,7 +926,6 @@ function weekStartStr() {
 
 function renderResults() {
   renderAtBat();
-  renderFocusHours();
   renderActivity14();
   renderGlory();
   renderGoals();
@@ -931,39 +933,8 @@ function renderResults() {
 }
 
 // 集中時間帯ヒートマップ(実測)。上段=集中度評価、下段=タスク完了数、横軸=時間帯
-function renderFocusHours() {
-  const box = $("#focus-hours");
-  if (!box) return;
-  const { total, hours } = focusHourStats();
-  const byHour = {};
-  for (const x of hours) byHour[x.h] = x;
-  const doneByHour = {};
-  let doneMax = 1;
-  for (const t of state.done) if (t.done_at) {
-    const h = new Date(t.done_at).getHours();
-    doneByHour[h] = (doneByHour[h] || 0) + 1;
-    doneMax = Math.max(doneMax, doneByHour[h]);
-  }
-  const HOURS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1];
-  const cols = HOURS.map((h) => {
-    const s = byHour[h];
-    const alpha = s ? (0.15 + 0.85 * (s.avg - 1) / 2) : 0;
-    const cell = s
-      ? `<div class="fh-cell" style="background:rgba(79,70,229,${alpha.toFixed(2)})" title="${h}時: 平均${s.avg.toFixed(1)} (${s.n}回)"></div>`
-      : `<div class="fh-cell empty"></div>`;
-    const dh = doneByHour[h] || 0;
-    const bar = `<div class="fh-done"><div class="b" style="height:${dh ? Math.max(12, Math.round(dh / doneMax * 100)) : 0}%"></div></div>`;
-    return `<div class="fh-col">${cell}${bar}<div class="fh-h">${h}</div></div>`;
-  }).join("");
-  const m = measuredFocusHours();
-  const note = m
-    ? `🔥 あなたの集中時間帯(実測): <b>${(m.top.length ? m.top : ["判定中"]).map((x) => typeof x === "number" ? x + "時" : x).join("・")}</b> — タスクタブのおすすめも実測で出しています`
-    : `実測データ収集中: <b>${total} / ${MEASURE_MIN}件</b>。ポモドーロのあとに🔥😐😴を押すと貯まり、${MEASURE_MIN}件でおすすめが"あなた専用"に切り替わります`;
-  box.innerHTML = `
-    <div class="fh-legend muted">上段=集中度(濃いほど🔥) / 下段=タスク完了数 / 横軸=時間帯</div>
-    <div class="fh-grid">${cols}</div>
-    <p class="fh-note muted">${note}</p>`;
-}
+// renderFocusHours は撤去(2026-07-26)。ポモ撤去で focus_log への記録が止まり、
+// 判定に必要な30件へ永久に届かなくなったため(実測20件・評価17件・最終記録7/12で停止)。
 
 function renderAtBat() {
   const ws = weekStartStr();
@@ -1012,37 +983,42 @@ $("#goal-form").addEventListener("submit", async (e) => {
   const title = $("#goal-title").value.trim();
   if (!title) return;
   const threshold = Math.min(100, Math.max(1, Number($("#goal-threshold").value) || 75));
-  await sb.from("goals").insert({ title, threshold, progress: 0 });
+  const payload = { title, threshold, progress: 0 };
+  if (state.hasGoalTarget) {
+    payload.target_value = Number($("#goal-target").value) || null;
+    payload.unit = $("#goal-unit").value.trim() || null;
+  }
+  await sb.from("goals").insert(payload);
   e.target.reset();
   $("#goal-threshold").value = 75;
   await refresh();
 });
 
+// 目標=ゲージをやめ、「目標値 × 基準% = 合格ライン」を出すだけにした(2026-07-26)。
+// 理由(賢大):「何をもって75%なのかが分からない状態」。分母が無い%は意味を持たない。
+// 進捗は追わない。どこからが合格かが分かれば、責めない設計は成立する。
 function renderGoals() {
   const box = $("#goal-list");
+  const note = $("#goal-note");
   box.innerHTML = "";
-  if (!state.goals.length) { box.innerHTML = `<p class="muted">目標はまだありません。75%で成功、完璧じゃなくていい。</p>`; return; }
+  note.textContent = state.hasGoalTarget
+    ? ""
+    : "⚠ 目標値の保存には、Supabaseで1回だけSQLを実行する必要があります(田中に「目標のSQL」と言えば出します)。";
+  if (!state.goals.length) {
+    box.innerHTML = `<p class="muted">目標はまだありません。満点でなくていい。<b>どこからが合格か</b>を先に決めるのが目的です。</p>`;
+    return;
+  }
   for (const g of state.goals) {
-    const ok = g.progress >= g.threshold;
+    const u = esc(g.unit || "");
+    const pass = g.target_value ? Math.ceil((g.target_value * g.threshold) / 100) : null;
     const div = document.createElement("div");
-    div.className = "goal" + (ok ? " ok" : "");
+    div.className = "goal";
     div.innerHTML = `
-      <div class="goal-top"><span class="goal-title">${ok ? "✅ " : ""}${esc(g.title)}</span><span class="goal-pct">${g.progress}%</span></div>
-      <div class="goal-bar"><div class="goal-fill" style="width:${Math.min(100, g.progress)}%"></div><div class="goal-line" style="left:${g.threshold}%"></div></div>
-      <div class="row goal-ctl">
-        <input type="range" min="0" max="100" value="${g.progress}" class="gr">
-        <button class="save-b ghost">保存</button>
-        <button class="del-b danger">削除</button>
-      </div>`;
-    const range = div.querySelector(".gr");
-    range.addEventListener("input", () => {
-      div.querySelector(".goal-pct").textContent = range.value + "%";
-      div.querySelector(".goal-fill").style.width = Math.min(100, range.value) + "%";
-    });
-    div.querySelector(".save-b").addEventListener("click", async () => {
-      await sb.from("goals").update({ progress: Number(range.value) }).eq("id", g.id);
-      await refresh();
-    });
+      <div class="goal-top"><span class="goal-title">${esc(g.title)}</span></div>
+      <div class="goal-pass">${pass
+        ? `目標 <b>${g.target_value}${u}</b> ／ <span class="pass-num">合格ライン ${pass}${u}</span>（${g.threshold}%）`
+        : `<span class="muted">目標値が未設定です（作り直すと合格ラインが出ます）</span>`}</div>
+      <div class="row goal-ctl"><button class="del-b danger">削除</button></div>`;
     div.querySelector(".del-b").addEventListener("click", async () => {
       if (!confirm(`目標「${g.title}」を削除しますか?`)) return;
       await sb.from("goals").delete().eq("id", g.id);
