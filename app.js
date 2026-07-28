@@ -50,8 +50,9 @@ function setDayPart(part, arr) {
   if (dayState) { dayState[part] = arr; pushDayState(); }
 }
 const addSkip = (id) => setDayPart("skips", [...getSkips(), id]);
-const addLater = (id) => setDayPart("laters", [...getLaters(), id]);
 const setTop3 = (ids) => setDayPart("top3", ids.slice(0, 3));
+// 「あとで」を積む口(addLater)は「今すぐやる1個」と一緒に撤去(2026-07-28)。
+// getLaters は残す=今日すでに「あとで」した分の並び順は最後まで効かせる。
 
 async function loadDayState() {
   try {
@@ -244,17 +245,8 @@ function metaText(i) {
   return parts.join("・") || "　";
 }
 
-// 今すぐ1個
-let nowOneId = null;
-let nowOneMode = "priority";
-function pickNowOne(pool) {
-  const t3 = pool.filter((i) => i.top3);
-  const cands = t3.length ? t3 : pool;
-  if (!cands.length) { nowOneId = null; return; }
-  nowOneId = nowOneMode === "random"
-    ? cands[Math.floor(Math.random() * cands.length)].id
-    : cands[0].id;
-}
+// 「今すぐやる1個」は撤去(2026-07-28 賢大の判断)。TOP3と役割が重複していた。
+// 併せて「あとで」ボタンも消えた(このカードにしか無かったため)。
 
 const byId = (pool, id) => pool.find((i) => i.id === id);
 
@@ -265,7 +257,6 @@ async function completeItem(i) {
     await sb.from("routine_log").insert({ routine_id: i.id, on_date: todayStr(), result: "done" });
   }
   setTop3(getTop3().filter((x) => x !== i.id)); // ルーティンも完了したらTOP3枠を空ける
-  if (nowOneId === i.id) nowOneId = null;
   await refresh();
 }
 
@@ -273,12 +264,12 @@ async function completeItem(i) {
 async function restRoutine(id) {
   await sb.from("routine_log").insert({ routine_id: id, on_date: todayStr(), result: "rest" });
   setTop3(getTop3().filter((x) => x !== id)); // 休んだルーティンもTOP3枠を空ける
-  if (nowOneId === id) nowOneId = null;
   await refresh();
 }
 
-// 放置警告バッジ(予定曜日なのに2日以上記録なし)
-const warnHtml = (i) => i.kind === "routine" && i.missed >= 2 ? `<span class="warn"> ⚠${i.missed}日放置</span>` : "";
+// 放置警告バッジ(⚠N日放置)は撤去(2026-07-28 賢大の判断)。
+// ルーティンは実績に数えない=責める道具にしない方針(2026-07-26)と揃える。
+// 「見て分かる」用の直近7日ストリップ(●◐○)はタスクタブに残っている。
 
 function renderToday() {
   const d = new Date();
@@ -286,10 +277,7 @@ function renderToday() {
   const pool = todayPool();
   $("#today-empty").classList.toggle("hidden", pool.length > 0);
 
-  if (!nowOneId || !pool.some((i) => i.id === nowOneId)) pickNowOne(pool);
-  renderNowOne(pool);
   renderTop3(pool);
-  renderBlank();
   renderRest(pool);
 }
 
@@ -340,40 +328,13 @@ function openTop3Picker(pool) {
   });
 }
 
-function renderNowOne(pool) {
-  const box = $("#now-one");
-  const i = nowOneId ? byId(pool, nowOneId) : null;
-  if (!i) { box.innerHTML = `<p class="muted">タスクがありません。タスクタブで足すと、ここに1個ハイライトされます。</p>`; return; }
-  box.innerHTML = `
-    <div class="now-card">
-      <div class="now-name">${esc(i.name)}${warnHtml(i)}</div>
-      <div class="now-meta">${metaText(i)}</div>
-      <div class="row now-actions">
-        <button class="done-btn primary">やった ✅</button>
-        <button class="later-btn">あとで</button>
-        ${i.kind === "routine" ? '<button class="rest-btn">今日は休む 😴</button>' : ""}
-      </div>
-      <div class="row now-repick">
-        <span class="muted">選び直す:</span>
-        <button class="rp-pri ghost">優先度順</button>
-        <button class="rp-rnd ghost">ランダム</button>
-      </div>
-    </div>`;
-  box.querySelector(".done-btn").addEventListener("click", () => completeItem(i));
-  box.querySelector(".later-btn").addEventListener("click", () => { addLater(i.id); nowOneId = null; renderToday(); });
-  const restBtn = box.querySelector(".rest-btn");
-  if (restBtn) restBtn.addEventListener("click", () => restRoutine(i.id));
-  box.querySelector(".rp-pri").addEventListener("click", () => { nowOneMode = "priority"; nowOneId = null; renderToday(); });
-  box.querySelector(".rp-rnd").addEventListener("click", () => { nowOneMode = "random"; nowOneId = null; renderToday(); });
-}
-
 function renderRest(pool) {
   const t3ids = getTop3();
-  const rest = pool.filter((i) => !t3ids.includes(i.id) && i.id !== nowOneId);
+  const rest = pool.filter((i) => !t3ids.includes(i.id));
   const canTop3 = t3ids.length < 3;
   const restLi = (i) => {
     const li = document.createElement("li");
-    li.innerHTML = `<span class="name">${i.kind === "routine" ? "🔁 " : ""}${esc(i.name)}${warnHtml(i)}</span><span class="meta">${metaText(i)}</span>
+    li.innerHTML = `<span class="name">${i.kind === "routine" ? "🔁 " : ""}${esc(i.name)}</span><span class="meta">${metaText(i)}</span>
       ${canTop3 ? '<button class="t3-b">TOP3</button>' : ""}${i.kind === "routine" ? '<button class="rest-b2">休む</button>' : ""}<button class="done-b2">完了</button>`;
     if (canTop3) li.querySelector(".t3-b").addEventListener("click", () => { toggleTop3(i.id); renderToday(); });
     if (i.kind === "routine") li.querySelector(".rest-b2").addEventListener("click", () => restRoutine(i.id));
@@ -395,9 +356,8 @@ function renderTodayRoutines(routines, makeLi) {
   const scheduled = state.routines.filter((r) => r.days.includes(dow));
   if (!scheduled.length) { box.innerHTML = ""; return; }
   const recorded = state.logs.filter((l) => scheduled.some((r) => r.id === l.routine_id)).length;
-  const warn = routines.some((r) => (r.missed || 0) >= 2) ? ' <span class="warn">⚠放置あり</span>' : "";
   box.innerHTML = `
-    <button type="button" class="rt-head">🔁 ルーティン ${recorded}/${scheduled.length} 済${warn}
+    <button type="button" class="rt-head">🔁 ルーティン ${recorded}/${scheduled.length} 済
       <span class="rt-arrow">${routinesOpen ? "▾ とじる" : "▸ ひらく"}</span></button>
     <ul class="list rt-list${routinesOpen ? "" : " hidden"}"></ul>`;
   box.querySelector(".rt-head").addEventListener("click", () => { routinesOpen = !routinesOpen; renderToday(); });
@@ -435,35 +395,7 @@ $("#quick-add").addEventListener("submit", async (e) => {
   }
 });
 
-// 余白ブロック(何もしない時間・端末内保存)
-const getBlank = () => JSON.parse(localStorage.getItem("blank") || '{"start":"13:00","min":30}');
-function addMinutes(hhmm, min) {
-  const [h, m] = hhmm.split(":").map(Number);
-  const t = h * 60 + m + min;
-  return `${String(Math.floor(t / 60) % 24).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
-}
-function renderBlank() {
-  const b = getBlank();
-  $("#blank-block").innerHTML = `
-    <div class="blank-card">
-      <span>🌙 余白 ${b.start}–${addMinutes(b.start, b.min)}(${b.min}分・何もしない)</span>
-      <button class="edit-b ghost">変更</button>
-    </div>`;
-  $("#blank-block .edit-b").addEventListener("click", () => {
-    $("#blank-block").innerHTML = `
-      <div class="blank-card row">
-        <input type="time" class="bs" value="${b.start}">
-        <input type="number" class="bm" min="5" step="5" value="${b.min}" style="width:64px">分
-        <button class="save-b primary">保存</button>
-      </div>`;
-    $("#blank-block .save-b").addEventListener("click", () => {
-      const start = $("#blank-block .bs").value || "13:00";
-      const min = Number($("#blank-block .bm").value) || 30;
-      localStorage.setItem("blank", JSON.stringify({ start, min }));
-      renderBlank();
-    });
-  });
-}
+// 「🌙余白」ブロックは撤去(2026-07-28 賢大の判断)。
 
 // ---------- ポモドーロは撤去(v6.2) ----------
 // 賢大の判断:「25分作業5分休憩×4セットが1作業のMAXだと分かればいい」
@@ -631,10 +563,7 @@ function renderFocus30() {
 
 // 実績(完了タスクの振り返り)
 function renderDone() {
-  const doneDate = (t) => {
-    const d = new Date(t.done_at);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
+  const doneDate = doneDateStr;
   const today = todayStr();
   const weekAgoStr = dstr(new Date(Date.now() - 6 * 86400000));
   const rmap = new Map((state.routinesAll || []).map((r) => [r.id, r.name]));
@@ -652,7 +581,7 @@ function renderDone() {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(t);
   }
-  for (const l of rdones) {
+  for (const l of routineDones()) {
     if (!groups.has(l.on_date)) groups.set(l.on_date, []);
     groups.get(l.on_date).push({ routine: true, name: rmap.get(l.routine_id) || "ルーティン" });
   }
@@ -724,10 +653,9 @@ function renderRoutines() {
   for (const r of state.routines) {
     const li = document.createElement("li");
     const daysTxt = r.days.length === 7 ? "毎日" : r.days.map((d) => WEEKDAYS[d]).join("");
-    const missed = missedDays(r);
     const todayLog = state.logs.find((l) => l.routine_id === r.id);
     const status = todayLog ? (todayLog.result === "done" ? "・今日✅" : "・今日😴休み") : "";
-    li.innerHTML = `<span class="name">${esc(r.name)}${missed >= 2 ? `<span class="warn"> ⚠${missed}日放置</span>` : ""}</span>
+    li.innerHTML = `<span class="name">${esc(r.name)}</span>
       ${habitStrip(r)}
       <span class="meta">${daysTxt}${r.minutes ? "・" + r.minutes + "分" : ""}${status}</span>
       <button class="danger del-b">削除</button>`;
@@ -966,16 +894,44 @@ function renderActivity14() {
   }).join("") + `</div>`;
 }
 
+// 栄光リスト:カテゴリ別をやめ、素直な積み上げ(今週/今月/通算)＋週の自己ベストにした(2026-07-28)。
+// 理由(賢大の指摘「リセットしたい」への回答):カテゴリを付ける入口が「😤嫌い」チェックしか
+// 無いので、実データの9割が「その他」に落ちて意味を持っていなかった(その他33/嫌い6/事務1)。
+// 分類の手間ゼロで、消さずに増え続ける形に置き換える。
+// done_at はUTC保存なので、日付は必ず端末のローカル時刻に直してから切る。
+// (深夜0〜9時に完了した分が「前日」に数えられるのを防ぐ)
+const doneDateStr = (t) => (t.done_at ? dstr(new Date(t.done_at)) : "");
+
 function renderGlory() {
-  const tally = {};
-  for (const t of state.done) { const c = t.category || "その他"; tally[c] = (tally[c] || 0) + 1; }
-  const entries = Object.entries(tally).sort((a, b) => b[1] - a[1]);
   const box = $("#glory");
-  if (!entries.length) { box.innerHTML = `<p class="muted">完了タスクが貯まると、カテゴリ別にここへ積み上がります。</p>`; return; }
-  const top = entries[0][1];
-  box.innerHTML = entries.map(([c, n]) =>
-    `<div class="glory-row"><span class="g-cat">${esc(c)}</span><span class="g-bar-wrap"><span class="g-bar" style="width:${Math.round((n / top) * 100)}%"></span></span><span class="g-num">${n}</span></div>`
-  ).join("");
+  const all = state.done.length;
+  if (!all) { box.innerHTML = `<p class="muted">タスクを完了すると、ここに消えない実績として積み上がります。</p>`; return; }
+
+  const ws = weekStartStr();
+  const monthStart = todayStr().slice(0, 8) + "01";
+  const week = state.done.filter((t) => doneDateStr(t) >= ws).length;
+  const month = state.done.filter((t) => doneDateStr(t) >= monthStart).length;
+
+  // 週の自己ベスト(月曜始まりで集計)
+  const byWeek = {};
+  for (const t of state.done) {
+    const ds = doneDateStr(t);
+    if (!ds) continue;
+    const d = new Date(ds + "T00:00:00");
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    const k = dstr(d);
+    byWeek[k] = (byWeek[k] || 0) + 1;
+  }
+  const best = Math.max(0, ...Object.values(byWeek));
+  const bestIsNow = best > 0 && byWeek[ws] === best;
+
+  box.innerHTML = `
+    <div class="glory-stats">
+      <div class="g-stat"><span class="g-n">${week}</span><span class="g-l">今週</span></div>
+      <div class="g-stat"><span class="g-n">${month}</span><span class="g-l">今月</span></div>
+      <div class="g-stat"><span class="g-n">${all}</span><span class="g-l">通算</span></div>
+    </div>
+    <p class="g-best muted">週の自己ベスト ${best}件${bestIsNow ? " — 🏆 <b>今週が自己ベストです</b>" : ""}</p>`;
 }
 
 $("#goal-form").addEventListener("submit", async (e) => {
@@ -1107,7 +1063,7 @@ function applySimpleMode() {
   $("#today-more").open = !simpleMode;
   $("#simple-toggle").textContent = simpleMode ? "🔧 隠している機能を表示する" : "✅「今日やる3つ」だけに戻す";
   $("#simple-note").textContent = simpleMode
-    ? "タスク／アイデア／運用／実績・今すぐ1個・ポモドーロは、隠しているだけです(データは全部残っています)。"
+    ? "タスク／実績のタブは、隠しているだけです(データは全部残っています)。"
     : "全機能を表示中です。";
   // 隠したタブを開いたままにしない
   const active = document.querySelector("#tabbar button.active");
@@ -1125,14 +1081,21 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// 1箇所の描画エラーで全体が道連れになるのを防ぐ(v6.6)。
+// 事故:renderDone内の未定義変数で refresh が途中停止し、Obsidian受信箱とタイムバケットが
+// 数日間まるごと表示されなくなっていた。以後は壊れた1ブロックだけが空になり、他は動く。
+function safeRender(label, fn) {
+  try { fn(); } catch (e) { console.error(`[今日やる] ${label} の描画に失敗:`, e); }
+}
+
 async function refresh() {
   lastRefresh = Date.now();
   await loadAll();
-  renderToday();
-  renderTasks();
-  renderRoutines();
-  renderDelegateNames();
-  renderResults();
+  safeRender("今日", renderToday);
+  safeRender("タスク", renderTasks);
+  safeRender("ルーティン", renderRoutines);
+  safeRender("委任先", renderDelegateNames);
+  safeRender("実績", renderResults);
   await Promise.all([loadBucket(), loadInbox()]);
 }
 

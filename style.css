@@ -80,24 +80,6 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 /* 3秒クイック追加 */
 #quick-add input { width: 100%; background: #fff; }
 
-/* ポモドーロ(「今すぐ1個」カードの下半分として一体表示) */
-#now-wrap .now-card { border-radius: var(--radius) var(--radius) 0 0; }
-#pomodoro { border-radius: 0 0 var(--radius) var(--radius); padding: 10px 14px; margin-bottom: 14px;
-  color: #fff; box-shadow: 0 6px 20px rgba(79,70,229,.35); }
-#pomodoro.work { background: #4338ca; }
-#pomodoro.break { background: #0e9f6e; }
-.pomo-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-#pomo-phase { font-size: .8rem; opacity: .9; }
-#pomo-count { color: rgba(255,255,255,.85); font-size: .75rem; }
-#pomo-time { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
-.pomo-row .sp { flex: 1; }
-.pomo-row button { padding: 8px 12px; font-size: .85rem; }
-#pomo-task { font-size: .8rem; opacity: .85; margin-top: 4px; }
-#pomo-rate { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; min-height: 0; }
-#pomo-rate .pr-q { font-size: .85rem; opacity: .9; }
-#pomo-rate button { font-size: 1.3rem; padding: 4px 12px; border-radius: 10px; background: rgba(255,255,255,.18); border: none; }
-#pomo-rate .muted { color: rgba(255,255,255,.85); }
-
 /* 集中時間帯ヒートマップ(実測) */
 #focus-hours { background: var(--card); border-radius: var(--radius); padding: 12px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
 .fh-grid { display: flex; gap: 2px; margin-top: 8px; }
@@ -109,9 +91,6 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 .fh-h { font-size: .55rem; color: var(--muted); text-align: center; margin-top: 2px; }
 .fh-legend { font-size: .7rem; }
 .fh-note { margin: 8px 0 0; }
-#pomo-toggle { background: #fff; color: var(--indigo); font-weight: 700; }
-#pomo-skip { background: rgba(255,255,255,.2); color: #fff; }
-#pomo-sound { background: rgba(255,255,255,.2); color: #fff; min-width: 44px; }
 
 /* TOP3 */
 #top3 { display: flex; flex-direction: column; gap: 8px; }
@@ -127,18 +106,6 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
   display: flex; flex-direction: column; gap: 6px; }
 .t3-picker button[data-id] { text-align: left; background: #f0f1f7; font-size: .85rem; }
 .t3-picker button[data-id]:active { background: var(--indigo); color: #fff; }
-
-/* 今すぐ1個 */
-.now-card { background: var(--indigo); color: #fff; border-radius: var(--radius);
-  padding: 18px; box-shadow: 0 6px 20px rgba(79,70,229,.35); }
-.now-card .now-name { font-size: 1.3rem; font-weight: 800; margin-bottom: 2px; }
-.now-card .now-meta { opacity: .8; font-size: .85rem; margin-bottom: 12px; }
-.now-actions button { flex: 1; padding: 12px 8px; font-weight: 700; }
-.now-card .done-btn { background: #fff; color: var(--indigo); }
-.now-card .later-btn { background: rgba(255,255,255,.22); color: #fff; }
-.now-repick { align-items: center; margin-top: 10px; font-size: .8rem; }
-.now-repick .muted { color: rgba(255,255,255,.8); }
-.now-repick button { background: rgba(255,255,255,.2); color: #fff; padding: 6px 10px; font-size: .8rem; }
 
 /* 今日のルーティン折りたたみ */
 .rt-head { width: 100%; text-align: left; background: #eef0fb; border-radius: 12px; padding: 12px 14px;
@@ -157,12 +124,6 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 .dg-row .name { flex: 1; }
 .dg-row .meta { color: var(--muted); font-size: .75rem; white-space: nowrap; }
 .dg-row button { padding: 6px 10px; font-size: .8rem; }
-
-/* 余白ブロック */
-#blank-block { margin: 12px 0; }
-.blank-card { background: #eef0fb; border-radius: 12px; padding: 12px 14px; font-size: .9rem;
-  display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.blank-card .edit-b { padding: 6px 10px; font-size: .8rem; }
 
 /* リスト */
 .list { list-style: none; margin: 0; padding: 0; }
@@ -245,11 +206,13 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 .bar.zero { background: #e3e5ec; }
 .bar-d { font-size: .6rem; color: var(--muted); margin-top: 2px; }
 
-.glory-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: .88rem; }
-.g-cat { width: 76px; flex-shrink: 0; }
-.g-bar-wrap { flex: 1; background: #eceef4; border-radius: 999px; height: 12px; overflow: hidden; }
-.g-bar { display: block; height: 100%; background: linear-gradient(90deg, var(--indigo), #7c74f0); }
-.g-num { width: 28px; text-align: right; font-weight: 700; color: var(--indigo); }
+.glory-stats { display: flex; gap: 8px; }
+.g-stat { flex: 1; background: var(--card); border-radius: var(--radius); padding: 12px 8px;
+  text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+.g-n { display: block; font-size: 1.9rem; font-weight: 800; line-height: 1.1; color: var(--indigo);
+  font-variant-numeric: tabular-nums; }
+.g-l { display: block; font-size: .75rem; color: var(--muted); margin-top: 2px; }
+.g-best { margin-top: 8px; font-size: .8rem; }
 
 #goal-form { align-items: center; gap: 6px; margin-bottom: 10px; }
 #goal-form #goal-title { flex: 1; }

@@ -60,15 +60,8 @@
       <!-- ポモドーロは撤去。知識だけ残す(タイマーは端末標準を使う) -->
       <p class="pomo-note">⏱ 25分作業＋5分休憩 ×4セットが、1つの作業のMAX。</p>
 
-      <!-- 主役から降ろした一式(可逆・データは消していない) -->
-      <div data-simple-hide>
-        <p class="section-label">今すぐやる1個</p>
-        <div id="now-wrap">
-          <div id="now-one"></div>
-        </div>
-      </div>
-
-      <div id="blank-block" data-simple-hide></div>
+      <!-- 「今すぐやる1個」「🌙余白」は撤去(2026-07-28 賢大の判断)。
+           前者はTOP3と役割が重複、後者は使われていなかった。 -->
 
       <!-- 残りは畳む(見たい時だけ開く) -->
       <details id="today-more">
@@ -145,7 +138,7 @@
       <div id="activity14"></div>
 
       <!-- 栄光リスト -->
-      <p class="section-label">栄光リスト(カテゴリ別・積み上げ)</p>
+      <p class="section-label">栄光リスト(積み上げ)</p>
       <div id="glory"></div>
 
       <!-- 目標(75%基準) -->
@@ -215,7 +208,7 @@
         <button id="simple-toggle" type="button" class="ghost"></button>
         <p id="simple-note" class="muted"></p>
       </div>
-      <p class="muted">app v6.5</p>
+      <p class="muted">app v6.6</p>
     </section>
   </main>
 
