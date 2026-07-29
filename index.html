@@ -9,7 +9,10 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="style.css">
+<!-- ?v= は必ずアプリ版数と揃える。これが無いと index.html だけ新しく app.js が古い、という
+     混在が起きる(2026-07-29に実際に発生:HTMLはv6.7・JSはv6.6で画面が壊れた)。
+     版数を変えるとURLが変わる=端末は必ず取り直す。 -->
+<link rel="stylesheet" href="style.css?v=6.8">
 </head>
 <body>
 
@@ -211,7 +214,7 @@
         <button id="simple-toggle" type="button" class="ghost"></button>
         <p id="simple-note" class="muted"></p>
       </div>
-      <p class="muted">app v6.7</p>
+      <p class="muted">app v6.8</p>
     </section>
   </main>
 
@@ -265,6 +268,6 @@
 <datalist id="delegate-names"></datalist>
 
 <script src="config.js"></script>
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js?v=6.8"></script>
 </body>
 </html>
