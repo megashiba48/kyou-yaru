@@ -63,11 +63,14 @@
       <!-- 「今すぐやる1個」「🌙余白」は撤去(2026-07-28 賢大の判断)。
            前者はTOP3と役割が重複、後者は使われていなかった。 -->
 
-      <!-- 残りは畳む(見たい時だけ開く) -->
+      <!-- ルーティンは「今日やる3つ」とは別枠(2026-07-29)。混ぜるとTOP3が習慣の消化枠に化ける。
+           1行サマリーなので場所は取らない。タップで開く。 -->
+      <div id="today-routines"></div>
+
+      <!-- 残りのタスクは畳む(見たい時だけ開く) -->
       <details id="today-more">
-        <summary>ほかのタスク・ルーティンを見る</summary>
+        <summary>ほかのタスクを見る</summary>
         <ul id="today-rest" class="list"></ul>
-        <div id="today-routines"></div>
       </details>
 
       <p id="today-empty" class="muted hidden">全部終わってます。おつかれさま 🎉</p>
@@ -208,7 +211,7 @@
         <button id="simple-toggle" type="button" class="ghost"></button>
         <p id="simple-note" class="muted"></p>
       </div>
-      <p class="muted">app v6.6</p>
+      <p class="muted">app v6.7</p>
     </section>
   </main>
 

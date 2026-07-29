@@ -49,8 +49,9 @@ function setDayPart(part, arr) {
   localStorage.setItem(key, JSON.stringify(arr)); // オフライン保険で常に端末にも残す
   if (dayState) { dayState[part] = arr; pushDayState(); }
 }
-const addSkip = (id) => setDayPart("skips", [...getSkips(), id]);
 const setTop3 = (ids) => setDayPart("top3", ids.slice(0, 3));
+// 「スキップ」を積む口(addSkip)はUIから消えて久しいが、getSkipsは残す
+// =過去に積んだ分は今日の候補から外れたままにする。
 // 「あとで」を積む口(addLater)は「今すぐやる1個」と一緒に撤去(2026-07-28)。
 // getLaters は残す=今日すでに「あとで」した分の並び順は最後まで効かせる。
 
@@ -233,7 +234,11 @@ function todayPool() {
 function toggleTop3(id) {
   let ids = getTop3();
   if (ids.includes(id)) ids = ids.filter((x) => x !== id);
-  else { if (ids.length >= 3) return; ids.push(id); }
+  else {
+    if (state.routines.some((r) => r.id === id)) return; // ルーティンはTOP3に入れない(v6.7)
+    if (ids.length >= 3) return;
+    ids.push(id);
+  }
   setTop3(ids);
 }
 
@@ -274,6 +279,13 @@ async function restRoutine(id) {
 function renderToday() {
   const d = new Date();
   $("#today-date").textContent = `${d.getMonth() + 1}/${d.getDate()}(${WEEKDAYS[d.getDay()]})`;
+
+  // 旧バージョンでTOP3枠に入ったルーティンは、枠から外して掃除する(v6.7でタスク専用化)。
+  // 「今日やる3つ」が埋まっているのに何も表示されない、を防ぐ。
+  const ids = getTop3();
+  const cleaned = ids.filter((id) => !state.routines.some((r) => r.id === id));
+  if (cleaned.length !== ids.length) setTop3(cleaned);
+
   const pool = todayPool();
   $("#today-empty").classList.toggle("hidden", pool.length > 0);
 
@@ -281,16 +293,19 @@ function renderToday() {
   renderRest(pool);
 }
 
+// 「今日やる3つ」はタスク専用(2026-07-29 賢大の指摘「ルーティンがタスクとして登録されてる」)。
+// ルーティンは毎日の約束であって"今日決める3つ"ではない。混ぜるとTOP3が習慣の消化枠に化ける。
+// ルーティンは下の「🔁 ルーティン n/m 済」ブロックだけで扱う。
 function renderTop3(pool) {
   const box = $("#top3");
   box.innerHTML = "";
-  const t3 = getTop3().map((id) => byId(pool, id)).filter(Boolean);
+  const t3 = getTop3().map((id) => byId(pool, id)).filter((i) => i && i.kind === "task");
   for (let s = 0; s < 3; s++) {
     const i = t3[s];
     const slot = document.createElement("div");
     slot.className = "top3-slot" + (i ? "" : " empty");
     if (i) {
-      slot.innerHTML = `<div class="t3-name">${s + 1}. ${i.kind === "routine" ? "🔁 " : ""}${esc(i.name)}${i.postpone_count >= 3 ? '<span class="warn"> ・3回見送り</span>' : ""}</div>
+      slot.innerHTML = `<div class="t3-name">${s + 1}. ${esc(i.name)}${i.postpone_count >= 3 ? '<span class="warn"> ・3回見送り</span>' : ""}</div>
         <div class="t3-btns"><button class="done-b primary">完了</button><button class="off-b ghost">外す</button></div>`;
       slot.querySelector(".done-b").addEventListener("click", () => completeItem(i));
       slot.querySelector(".off-b").addEventListener("click", () => { toggleTop3(i.id); renderToday(); });
@@ -302,29 +317,22 @@ function renderTop3(pool) {
   }
 }
 
-// シンプルモードでは候補をまずタスクだけに絞る(ルーティン17本が混ざると"消化"に戻るため)
-let pickerRoutines = false;
+// 候補はタスクだけ。ルーティンはここに一切出さない(v6.7)。
 function openTop3Picker(pool) {
-  const cands = pool.filter((i) => !i.top3);
-  const routines = cands.filter((i) => i.kind === "routine");
-  const list = simpleMode && !pickerRoutines ? cands.filter((i) => i.kind === "task") : cands;
+  const list = pool.filter((i) => !i.top3 && i.kind === "task");
   const box = $("#top3");
   const picker = document.createElement("div");
   picker.className = "t3-picker";
-  const moreBtn = simpleMode && !pickerRoutines && routines.length
-    ? `<button type="button" class="rt-more ghost">🔁 ルーティンからも選ぶ(${routines.length})</button>` : "";
   picker.innerHTML = list.length
     ? `<p class="muted">今日やる3つに入れるものを選ぶ:</p>` +
-      list.map((i) => `<button type="button" data-id="${i.id}">${i.kind === "routine" ? "🔁 " : ""}${esc(i.name)}</button>`).join("") +
-      moreBtn + `<button type="button" class="cancel-b ghost">やめる</button>`
-    : `<p class="muted">選べるものがありません。下の入力欄から追加してください。</p>` +
-      moreBtn + `<button type="button" class="cancel-b ghost">閉じる</button>`;
+      list.map((i) => `<button type="button" data-id="${i.id}">${esc(i.name)}</button>`).join("") +
+      `<button type="button" class="cancel-b ghost">やめる</button>`
+    : `<p class="muted">選べるタスクがありません。下の入力欄から追加してください。<br>(ルーティンは下の「🔁 ルーティン」から)</p>` +
+      `<button type="button" class="cancel-b ghost">閉じる</button>`;
   box.appendChild(picker);
-  picker.querySelector(".cancel-b").addEventListener("click", () => { pickerRoutines = false; renderToday(); });
-  const rtMore = picker.querySelector(".rt-more");
-  if (rtMore) rtMore.addEventListener("click", () => { pickerRoutines = true; renderToday(); openTop3Picker(todayPool()); });
+  picker.querySelector(".cancel-b").addEventListener("click", () => renderToday());
   picker.querySelectorAll("button[data-id]").forEach((b) => {
-    b.addEventListener("click", () => { pickerRoutines = false; toggleTop3(b.dataset.id); renderToday(); });
+    b.addEventListener("click", () => { toggleTop3(b.dataset.id); renderToday(); });
   });
 }
 
@@ -334,9 +342,11 @@ function renderRest(pool) {
   const canTop3 = t3ids.length < 3;
   const restLi = (i) => {
     const li = document.createElement("li");
+    // TOP3に入れられるのはタスクだけ。ルーティンの行にはTOP3ボタンを出さない(v6.7)
+    const showT3 = canTop3 && i.kind === "task";
     li.innerHTML = `<span class="name">${i.kind === "routine" ? "🔁 " : ""}${esc(i.name)}</span><span class="meta">${metaText(i)}</span>
-      ${canTop3 ? '<button class="t3-b">TOP3</button>' : ""}${i.kind === "routine" ? '<button class="rest-b2">休む</button>' : ""}<button class="done-b2">完了</button>`;
-    if (canTop3) li.querySelector(".t3-b").addEventListener("click", () => { toggleTop3(i.id); renderToday(); });
+      ${showT3 ? '<button class="t3-b">TOP3</button>' : ""}${i.kind === "routine" ? '<button class="rest-b2">休む</button>' : ""}<button class="done-b2">完了</button>`;
+    if (showT3) li.querySelector(".t3-b").addEventListener("click", () => { toggleTop3(i.id); renderToday(); });
     if (i.kind === "routine") li.querySelector(".rest-b2").addEventListener("click", () => restRoutine(i.id));
     li.querySelector(".done-b2").addEventListener("click", () => completeItem(i));
     return li;
@@ -364,7 +374,8 @@ function renderTodayRoutines(routines, makeLi) {
   const ul = box.querySelector(".rt-list");
   if (routinesOpen) {
     for (const i of routines) ul.appendChild(makeLi(i));
-    if (!routines.length) ul.innerHTML = `<li><span class="name muted">${recorded >= scheduled.length ? "今日の分は全部記録済み 🎉" : "残りは上のTOP3/今すぐ1個に出ています"}</span></li>`;
+    // ルーティンはTOP3に入らなくなったので、残りは必ずこのリストに出る(v6.7)
+    if (!routines.length) ul.innerHTML = `<li><span class="name muted">今日の分は全部記録済み 🎉</span></li>`;
   }
 }
 
