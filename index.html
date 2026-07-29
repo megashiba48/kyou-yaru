@@ -12,7 +12,7 @@
 <!-- ?v= は必ずアプリ版数と揃える。これが無いと index.html だけ新しく app.js が古い、という
      混在が起きる(2026-07-29に実際に発生:HTMLはv6.7・JSはv6.6で画面が壊れた)。
      版数を変えるとURLが変わる=端末は必ず取り直す。 -->
-<link rel="stylesheet" href="style.css?v=6.8">
+<link rel="stylesheet" href="style.css?v=6.9">
 </head>
 <body>
 
@@ -106,6 +106,9 @@
           <label class="chk"><input type="checkbox" id="task-hate"> 😤嫌い(やりたくない)</label>
           <label class="chk"><input type="checkbox" id="task-delegate-on"> 🤝委任する</label>
           <input id="task-delegate" class="hidden" list="delegate-names" placeholder="誰に頼む?" style="width:120px">
+        </div>
+        <div class="row">
+          <select id="task-goal" class="goal-sel"><option value="">🎯 目標に紐づけない</option></select>
           <button class="primary" type="submit">追加</button>
         </div>
       </form>
@@ -147,14 +150,26 @@
       <p class="section-label">栄光リスト(積み上げ)</p>
       <div id="glory"></div>
 
-      <!-- 目標(75%基準) -->
-      <p class="section-label">目標(合格ラインを決める)</p>
-      <form id="goal-form" class="row">
-        <input id="goal-title" placeholder="目標(例:今月の投稿)" required>
-        <input id="goal-target" type="number" min="1" placeholder="目標値" style="width:88px">
-        <input id="goal-unit" placeholder="単位(本)" style="width:76px">
-        <input id="goal-threshold" type="number" min="1" max="100" value="75" style="width:60px">%
-        <button class="primary" type="submit">追加</button>
+      <!-- 目標:主役は「完了の定義」の文章。数値は任意のおまけ(2026-07-29 再設計) -->
+      <p class="section-label">目標</p>
+      <form id="goal-form">
+        <input id="goal-title" placeholder="目標(例:新アカのフォロワー1,000人)" required>
+        <textarea id="goal-dod" rows="2" required
+          placeholder="何をもって完了? (例:TikTokのフォロワーが1,000人を超えて、Shop申請が通った時)"></textarea>
+        <div class="row">
+          <label class="date-label">期限(任意)<input id="goal-due" type="date"></label>
+          <button class="primary" type="submit">追加</button>
+        </div>
+        <details class="goal-adv">
+          <summary>数で数えられる目標なら(任意)</summary>
+          <div class="row">
+            <input id="goal-target" type="number" min="1" placeholder="目標値" style="width:88px">
+            <input id="goal-unit" placeholder="単位(本)" style="width:76px">
+            <span class="muted">合格ライン</span>
+            <input id="goal-threshold" type="number" min="1" max="100" value="75" style="width:56px">%
+          </div>
+          <p class="muted">満点でなくていい。<b>どこからが合格か</b>を先に決めるための欄です。</p>
+        </details>
       </form>
       <p id="goal-note" class="muted"></p>
       <div id="goal-list"></div>
@@ -214,7 +229,7 @@
         <button id="simple-toggle" type="button" class="ghost"></button>
         <p id="simple-note" class="muted"></p>
       </div>
-      <p class="muted">app v6.8</p>
+      <p class="muted">app v6.9</p>
     </section>
   </main>
 
@@ -257,6 +272,9 @@
       <label class="chk"><input type="checkbox" id="te-delegate-on"> 🤝委任する</label>
       <input id="te-delegate" class="hidden" list="delegate-names" placeholder="誰に頼む?" style="width:120px">
     </div>
+    <div class="row">
+      <select id="te-goal" class="goal-sel"><option value="">🎯 目標に紐づけない</option></select>
+    </div>
     <div class="row te-actions">
       <button id="te-save" class="primary" type="button">保存</button>
       <button id="te-cancel" class="ghost" type="button">キャンセル</button>
@@ -268,6 +286,6 @@
 <datalist id="delegate-names"></datalist>
 
 <script src="config.js"></script>
-<script type="module" src="app.js?v=6.8"></script>
+<script type="module" src="app.js?v=6.9"></script>
 </body>
 </html>

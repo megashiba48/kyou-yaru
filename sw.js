@@ -1,8 +1,8 @@
 // シンプルなキャッシュ(アプリの殻だけ。データは常にネット経由)
-const CACHE = "kyou-yaru-v31";
+const CACHE = "kyou-yaru-v32";
 
 // index.html の ?v= と必ず同じ値にする。ズレると端末が古いJSを掴んだままになる。
-const V = "6.8";
+const V = "6.9";
 
 self.addEventListener("message", (e) => {
   if (e.data === "skip") self.skipWaiting();

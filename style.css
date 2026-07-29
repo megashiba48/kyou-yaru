@@ -172,6 +172,7 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 .badge.cat { background: #e5e7f5; color: #4046a0; }
 .badge.dg { background: #e6f5ee; color: #0e7a52; }
 .badge.fc { background: #fdeede; color: #b45309; }
+.badge.gl { background: #ece9fb; color: #5b21b6; } /* どの目標のためのタスクか */
 .list li.delegated { border-left: 4px solid var(--tag, #888); }
 .list li.hate { background: #fdf0f0; }
 .list li .hate-b { background: #fee2e2; color: var(--danger); font-weight: 700; }
@@ -214,18 +215,38 @@ h2 { font-size: 1.1rem; margin: 20px 0 10px; }
 .g-l { display: block; font-size: .75rem; color: var(--muted); margin-top: 2px; }
 .g-best { margin-top: 8px; font-size: .8rem; }
 
-#goal-form { align-items: center; gap: 6px; margin-bottom: 10px; }
-#goal-form #goal-title { flex: 1; }
+/* 目標(2026-07-29 再設計:主役は「完了の定義」) */
+#goal-form { margin-bottom: 12px; }
+#goal-form input, #goal-form textarea { width: 100%; }
+#goal-form .row { margin-top: 6px; }
+#goal-form .row input, #goal-form .row select { width: auto; }
+#goal-form .date-label { flex: 1; }
+.goal-adv { margin-top: 8px; }
+.goal-adv summary { font-size: .8rem; color: var(--muted); cursor: pointer; }
+.goal-adv .row { align-items: center; }
+.goal-adv .muted { font-size: .75rem; margin-top: 4px; }
+.goal-sel { max-width: 100%; }
+
 .goal { background: var(--card); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
-.goal.ok { background: #ecfdf3; }
-.goal-top { display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 6px; }
-.goal-pct { color: var(--indigo); }
-.goal-bar { position: relative; height: 14px; background: #eceef4; border-radius: 999px; overflow: hidden; }
-.goal-fill { height: 100%; background: linear-gradient(90deg, var(--indigo), #7c74f0); }
-.goal.ok .goal-fill { background: var(--ok); }
-.goal-line { position: absolute; top: -2px; width: 2px; height: 18px; background: var(--ok); }
+.goal.achieved { background: #ecfdf3; }
+.goal-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+  font-weight: 700; margin-bottom: 8px; }
+.goal-title { flex: 1; }
+.goal-top button { padding: 6px 10px; font-size: .78rem; white-space: nowrap; }
+.goal-dod { background: #f4f5fb; border-radius: 8px; padding: 8px 10px; font-size: .88rem; line-height: 1.5; }
+.goal.achieved .goal-dod { background: #dcf5e7; }
+.dod-label { display: block; font-size: .68rem; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+.goal-due { font-size: .8rem; color: var(--muted); margin-top: 6px; }
+.goal-due.over { color: var(--danger); font-weight: 700; }
+.goal-pass { font-size: .85rem; margin-top: 6px; }
+.goal-pass .pass-num { color: var(--indigo); font-weight: 700; }
+.goal-tasks { margin-top: 8px; border-top: 1px solid #eceef4; padding-top: 8px; }
+.gt-head { font-size: .78rem; font-weight: 700; color: var(--muted); }
+.gt-list { list-style: none; margin: 4px 0 0; padding: 0; font-size: .85rem; }
+.gt-list li { padding: 1px 0; }
+.gt-none { font-size: .78rem; display: block; margin-top: 4px; }
+.goal-when { font-size: .75rem; margin-top: 6px; }
 .goal-ctl { align-items: center; gap: 8px; margin-top: 8px; }
-.goal-ctl .gr { flex: 1; }
 .goal-ctl button { padding: 6px 10px; font-size: .8rem; }
 
 /* アイデア:ブレインダンプ */

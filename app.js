@@ -134,70 +134,42 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ---------- データ取得 ----------
-let state = { tasks: [], routines: [], logs: [], done: [] };
+let state = { tasks: [], routines: [], done: [] };
 
 async function loadAll() {
-  const since14 = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
-  const since30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-  const [t, r, l, d, f, g] = await Promise.all([
+  // routine_log は読まなくなった(v6.9)。ルーティンは記録しないので参照先が無い。
+  // テーブルと過去の記録は残してある。
+  const [t, r, d, f, g] = await Promise.all([
     sb.from("tasks").select("*").eq("status", "open").order("created_at"),
     sb.from("routines").select("*"),
-    sb.from("routine_log").select("*").gte("on_date", since30),
     sb.from("tasks").select("*").eq("status", "done").order("done_at", { ascending: false }).limit(1000),
     sb.from("focus_log").select("*").gte("on_date", new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10)),
     sb.from("goals").select("*").order("created_at"),
     loadDayState(),
   ]);
-  const routinesAll = r.data || [];
-  const rlogs = l.data || [];
-  state = { tasks: t.data || [], routinesAll, routines: routinesAll.filter((x) => x.active),
-    rlogs, logs: rlogs.filter((x) => x.on_date === todayStr()), done: d.data || [],
-    focus: f.data || [], goals: g.data || [] };
+  state = { tasks: t.data || [], routines: (r.data || []).filter((x) => x.active),
+    done: d.data || [], focus: f.data || [], goals: g.data || [] };
   // delegated_at列がまだ無いDBでも壊れないように、列の有無を実データから判定
   state.hasDelegatedAt = [...state.tasks, ...state.done].some((x) => "delegated_at" in x);
-  // goals.target_value/unit の有無を実際に問い合わせて判定(行が0件でも正しく判定できる)
-  const probe = await sb.from("goals").select("target_value").limit(1);
-  state.hasGoalTarget = !probe.error;
 }
 
-// ルーティンの放置日数(昨日から遡り、予定曜日なのに記録がない日を数える。記録=完了/休みどちらでも可)
-function missedDays(r) {
-  const created = (r.created_at || "").slice(0, 10);
-  let missed = 0;
-  for (let i = 1; i <= 30; i++) {
-    const d = new Date(Date.now() - i * 86400000);
-    const ds = dstr(d);
-    if (created && ds < created) break;
-    if (!r.days.includes(d.getDay())) continue;
-    if (state.rlogs.some((l) => l.routine_id === r.id && l.on_date === ds)) break;
-    missed++;
-  }
-  return missed;
-}
-
-// ルーティンの完了記録(実績カウント用)
-// ルーティンの実施記録。実績(打席数・栄光リスト・14日グラフ)には入れない
-// = 習慣は「一目で確認するだけ」にする(2026-07-26 賢大の判断)
-const routineDones = () => (state.rlogs || []).filter((l) => l.result === "done");
+// ---------- ルーティンは「記録しない」(2026-07-29 賢大の再確認) ----------
+// 7/26に決めた「習慣は一目で確認するだけ」の徹底。完了/休む/放置日数/達成率を全て廃止した。
+// 残すのは「今日やる習慣はこの6つ」という一覧だけ。routine_log テーブルと過去の記録は消していない。
 
 // ---------- 「今日の候補」スコア ----------
 // 大きいほど先。締切の近さ > 優先度 > 放置ペナルティ > 短時間優遇
 function score(item) {
   let s = 0;
-  if (item.kind === "task") {
-    if (item.deadline) {
-      const days = (new Date(item.deadline) - new Date(todayStr())) / 86400000;
-      if (days < 0) s += 120;          // 期限切れ
-      else if (days === 0) s += 100;   // 今日締切
-      else if (days <= 2) s += 60;
-      else if (days <= 7) s += 30;
-    }
-    s += (4 - item.priority) * 20;              // 高=60 中=40 低=20
-    s += Math.min(item.postpone_count, 5) * 8;  // 放置するほど浮上
-  } else {
-    s += 50; // ルーティンは「毎日の約束」として中程度で浮上
-    s += Math.min(item.missed || 0, 5) * 8; // 放置するほど浮上
+  if (item.deadline) {
+    const days = (new Date(item.deadline) - new Date(todayStr())) / 86400000;
+    if (days < 0) s += 120;          // 期限切れ
+    else if (days === 0) s += 100;   // 今日締切
+    else if (days <= 2) s += 60;
+    else if (days <= 7) s += 30;
   }
+  s += (4 - item.priority) * 20;              // 高=60 中=40 低=20
+  s += Math.min(item.postpone_count, 5) * 8;  // 放置するほど浮上
   if (item.minutes && item.minutes <= 15) s += 10; // 着手しやすいものを少し上げる
   return s;
 }
@@ -206,20 +178,12 @@ function score(item) {
 function todayPool() {
   const skips = getSkips();
   const laters = getLaters();
-  const dow = new Date().getDay();
   const t3 = getTop3();
-  const items = [];
-  for (const t of state.tasks) {
-    items.push({ kind: "task", id: t.id, name: t.name, minutes: t.minutes,
-      deadline: t.deadline, priority: t.priority, postpone_count: t.postpone_count,
-      top3: t3.includes(t.id) });
-  }
-  for (const r of state.routines) {
-    if (!r.days.includes(dow)) continue;
-    if (state.logs.some((l) => l.routine_id === r.id)) continue; // 今日済み/スキップ済み
-    items.push({ kind: "routine", id: r.id, name: r.name, minutes: r.minutes,
-      deadline: null, priority: 2, postpone_count: 0, top3: t3.includes(r.id), missed: missedDays(r) });
-  }
+  // ルーティンはここに入れない(v6.9)。今日タブの候補・TOP3はタスクだけで構成する。
+  const items = state.tasks.map((t) => ({
+    id: t.id, name: t.name, minutes: t.minutes, deadline: t.deadline,
+    priority: t.priority, postpone_count: t.postpone_count, top3: t3.includes(t.id),
+  }));
   const visible = items.filter((i) => !skips.includes(i.id));
   visible.sort((a, b) => {
     const la = laters.includes(a.id) ? 1 : 0;
@@ -244,7 +208,6 @@ function toggleTop3(id) {
 
 function metaText(i) {
   const parts = [];
-  if (i.kind === "routine") parts.push("ルーティン");
   if (i.minutes) parts.push(`目安${i.minutes}分`);
   if (i.deadline) parts.push(i.deadline === todayStr() ? "締切今日" : `締切${i.deadline.slice(5).replace("-", "/")}`);
   return parts.join("・") || "　";
@@ -256,25 +219,10 @@ function metaText(i) {
 const byId = (pool, id) => pool.find((i) => i.id === id);
 
 async function completeItem(i) {
-  if (i.kind === "task") {
-    await sb.from("tasks").update({ status: "done", done_at: new Date().toISOString() }).eq("id", i.id);
-  } else {
-    await sb.from("routine_log").insert({ routine_id: i.id, on_date: todayStr(), result: "done" });
-  }
-  setTop3(getTop3().filter((x) => x !== i.id)); // ルーティンも完了したらTOP3枠を空ける
+  await sb.from("tasks").update({ status: "done", done_at: new Date().toISOString() }).eq("id", i.id);
+  setTop3(getTop3().filter((x) => x !== i.id));
   await refresh();
 }
-
-// ルーティンを今日は休む(実績には数えないが、放置扱いにもしない)
-async function restRoutine(id) {
-  await sb.from("routine_log").insert({ routine_id: id, on_date: todayStr(), result: "rest" });
-  setTop3(getTop3().filter((x) => x !== id)); // 休んだルーティンもTOP3枠を空ける
-  await refresh();
-}
-
-// 放置警告バッジ(⚠N日放置)は撤去(2026-07-28 賢大の判断)。
-// ルーティンは実績に数えない=責める道具にしない方針(2026-07-26)と揃える。
-// 「見て分かる」用の直近7日ストリップ(●◐○)はタスクタブに残っている。
 
 function renderToday() {
   const d = new Date();
@@ -291,15 +239,14 @@ function renderToday() {
 
   renderTop3(pool);
   renderRest(pool);
+  renderTodayRoutines();
 }
 
-// 「今日やる3つ」はタスク専用(2026-07-29 賢大の指摘「ルーティンがタスクとして登録されてる」)。
-// ルーティンは毎日の約束であって"今日決める3つ"ではない。混ぜるとTOP3が習慣の消化枠に化ける。
-// ルーティンは下の「🔁 ルーティン n/m 済」ブロックだけで扱う。
+// 「今日やる3つ」はタスク専用(2026-07-29)。ルーティンは下の一覧だけで扱う。
 function renderTop3(pool) {
   const box = $("#top3");
   box.innerHTML = "";
-  const t3 = getTop3().map((id) => byId(pool, id)).filter((i) => i && i.kind === "task");
+  const t3 = getTop3().map((id) => byId(pool, id)).filter(Boolean); // poolはタスクのみ(v6.9)
   for (let s = 0; s < 3; s++) {
     const i = t3[s];
     const slot = document.createElement("div");
@@ -319,7 +266,7 @@ function renderTop3(pool) {
 
 // 候補はタスクだけ。ルーティンはここに一切出さない(v6.7)。
 function openTop3Picker(pool) {
-  const list = pool.filter((i) => !i.top3 && i.kind === "task");
+  const list = pool.filter((i) => !i.top3); // poolはタスクのみ(v6.9)
   const box = $("#top3");
   const picker = document.createElement("div");
   picker.className = "t3-picker";
@@ -340,43 +287,35 @@ function renderRest(pool) {
   const t3ids = getTop3();
   const rest = pool.filter((i) => !t3ids.includes(i.id));
   const canTop3 = t3ids.length < 3;
-  const restLi = (i) => {
-    const li = document.createElement("li");
-    // TOP3に入れられるのはタスクだけ。ルーティンの行にはTOP3ボタンを出さない(v6.7)
-    const showT3 = canTop3 && i.kind === "task";
-    li.innerHTML = `<span class="name">${i.kind === "routine" ? "🔁 " : ""}${esc(i.name)}</span><span class="meta">${metaText(i)}</span>
-      ${showT3 ? '<button class="t3-b">TOP3</button>' : ""}${i.kind === "routine" ? '<button class="rest-b2">休む</button>' : ""}<button class="done-b2">完了</button>`;
-    if (showT3) li.querySelector(".t3-b").addEventListener("click", () => { toggleTop3(i.id); renderToday(); });
-    if (i.kind === "routine") li.querySelector(".rest-b2").addEventListener("click", () => restRoutine(i.id));
-    li.querySelector(".done-b2").addEventListener("click", () => completeItem(i));
-    return li;
-  };
-  // タスクは従来どおり並べ、ルーティンは1行サマリーに畳む(17本が混ざるごちゃつき対策)
   const ul = $("#today-rest");
   ul.innerHTML = "";
-  for (const i of rest.filter((x) => x.kind === "task")) ul.appendChild(restLi(i));
-  renderTodayRoutines(rest.filter((x) => x.kind === "routine"), restLi);
+  for (const i of rest) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="name">${esc(i.name)}</span><span class="meta">${metaText(i)}</span>
+      ${canTop3 ? '<button class="t3-b">TOP3</button>' : ""}<button class="done-b2">完了</button>`;
+    if (canTop3) li.querySelector(".t3-b").addEventListener("click", () => { toggleTop3(i.id); renderToday(); });
+    li.querySelector(".done-b2").addEventListener("click", () => completeItem(i));
+    ul.appendChild(li);
+  }
 }
 
-// 今日のルーティン折りたたみ(「6/17 済」の1行。タップで展開)
+// 今日のルーティン一覧(2026-07-29)。チェックも記録もしない、ただの「今日やる習慣」の確認用。
+// 完了/休む/達成率/放置日数は全て廃止済み。ここに操作するボタンは一つも置かない。
 let routinesOpen = false;
-function renderTodayRoutines(routines, makeLi) {
+function renderTodayRoutines() {
   const box = $("#today-routines");
   const dow = new Date().getDay();
-  const scheduled = state.routines.filter((r) => r.days.includes(dow));
-  if (!scheduled.length) { box.innerHTML = ""; return; }
-  const recorded = state.logs.filter((l) => scheduled.some((r) => r.id === l.routine_id)).length;
+  const today = state.routines.filter((r) => r.days.includes(dow));
+  if (!today.length) { box.innerHTML = ""; return; }
   box.innerHTML = `
-    <button type="button" class="rt-head">🔁 ルーティン ${recorded}/${scheduled.length} 済
+    <button type="button" class="rt-head">🔁 今日のルーティン(${today.length})
       <span class="rt-arrow">${routinesOpen ? "▾ とじる" : "▸ ひらく"}</span></button>
-    <ul class="list rt-list${routinesOpen ? "" : " hidden"}"></ul>`;
-  box.querySelector(".rt-head").addEventListener("click", () => { routinesOpen = !routinesOpen; renderToday(); });
-  const ul = box.querySelector(".rt-list");
-  if (routinesOpen) {
-    for (const i of routines) ul.appendChild(makeLi(i));
-    // ルーティンはTOP3に入らなくなったので、残りは必ずこのリストに出る(v6.7)
-    if (!routines.length) ul.innerHTML = `<li><span class="name muted">今日の分は全部記録済み 🎉</span></li>`;
-  }
+    <ul class="list rt-list${routinesOpen ? "" : " hidden"}">${
+      routinesOpen ? today.map((r) =>
+        `<li class="rt-item"><span class="name">${esc(r.name)}</span><span class="meta">${r.minutes ? `目安${r.minutes}分` : "　"}</span></li>`
+      ).join("") : ""
+    }</ul>`;
+  box.querySelector(".rt-head").addEventListener("click", () => { routinesOpen = !routinesOpen; renderTodayRoutines(); });
 }
 
 // ---------- 3秒クイック追加(名前だけで即入れる) ----------
@@ -457,6 +396,7 @@ $("#task-form").addEventListener("submit", async (e) => {
     category: $("#task-hate").checked ? "嫌い" : null,
     focus_needed: $("#task-focus").checked,
     delegate,
+    goal_id: $("#task-goal").value || null,
   };
   if (delegate && state.hasDelegatedAt) payload.delegated_at = new Date().toISOString();
   await sb.from("tasks").insert(payload);
@@ -523,10 +463,12 @@ function renderTasks() {
     const li = document.createElement("li");
     if (t.delegate) { li.classList.add("delegated"); li.style.setProperty("--tag", DELEGATE_COLORS[t.delegate] || "#888"); }
     if (t.category === "嫌い") li.classList.add("hate");
+    const goal = t.goal_id ? state.goals.find((g) => g.id === t.goal_id) : null;
     const badges = [
       t.category ? `<span class="badge cat">${esc(t.category)}</span>` : "",
       t.delegate ? `<span class="badge dg">🤝${esc(t.delegate)}</span>` : "",
       t.focus_needed ? `<span class="badge fc">🎯</span>` : "",
+      goal ? `<span class="badge gl">🎯${esc(goal.title)}</span>` : "", // どの目標のためのタスクか
     ].join("");
     li.innerHTML = `<span class="name editable">${esc(t.name)} ${badges}</span>
       <span class="meta">${pr[t.priority]}${t.minutes ? "・" + t.minutes + "分" : ""}${t.deadline ? "・〆" + t.deadline.slice(5).replace("-", "/") : ""}${t.postpone_count ? "・見送り" + t.postpone_count : ""}</span>
@@ -577,7 +519,6 @@ function renderDone() {
   const doneDate = doneDateStr;
   const today = todayStr();
   const weekAgoStr = dstr(new Date(Date.now() - 6 * 86400000));
-  const rmap = new Map((state.routinesAll || []).map((r) => [r.id, r.name]));
   const todayCount = state.done.filter((t) => doneDate(t) === today).length;
   const weekCount = state.done.filter((t) => doneDate(t) >= weekAgoStr).length;
   $("#done-summary").textContent = state.done.length
@@ -592,10 +533,7 @@ function renderDone() {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(t);
   }
-  for (const l of routineDones()) {
-    if (!groups.has(l.on_date)) groups.set(l.on_date, []);
-    groups.get(l.on_date).push({ routine: true, name: rmap.get(l.routine_id) || "ルーティン" });
-  }
+  // ルーティンの実施記録はここに混ぜない(2026-07-29)。ルーティンは実績ではない。
   const sorted = [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]));
   for (const [date, items] of sorted.slice(0, 30)) {
     const d = new Date(date + "T00:00:00");
@@ -603,7 +541,6 @@ function renderDone() {
     div.className = "done-group";
     div.innerHTML = `<div class="done-date">${date === today ? "今日" : date.slice(5).replace("-", "/") + "(" + WEEKDAYS[d.getDay()] + ")"} — ${items.length}件</div>` +
       items.map((t) => {
-        if (t.routine) return `<div class="done-item">🔁 ${esc(t.name)} <span class="meta">ルーティン</span></div>`;
         const hm = new Date(t.done_at);
         return `<div class="done-item">✅ ${esc(t.name)} <span class="meta">${String(hm.getHours()).padStart(2, "0")}:${String(hm.getMinutes()).padStart(2, "0")}</span></div>`;
       }).join("");
@@ -643,20 +580,8 @@ function renderDelegateNames() {
   $("#delegate-names").innerHTML = names.map((n) => `<option value="${esc(n)}">`).join("");
 }
 
-// 直近7日の実施を一目で(●=やった ◐=休んだ ○=予定日なのに記録なし ・=予定日でない)
-// 実績には数えない。習慣は「見て分かる」だけでいい(2026-07-26 賢大の判断)
-function habitStrip(r) {
-  const cells = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86400000);
-    if (!r.days.includes(d.getDay())) { cells.push('<span class="hb none">・</span>'); continue; }
-    const log = (state.rlogs || []).find((l) => l.routine_id === r.id && l.on_date === dstr(d));
-    if (!log) cells.push('<span class="hb miss">○</span>');
-    else if (log.result === "done") cells.push('<span class="hb done">●</span>');
-    else cells.push('<span class="hb rest">◐</span>');
-  }
-  return `<span class="habit" title="直近7日">${cells.join("")}</span>`;
-}
+// 直近7日ストリップ(●◐○)は撤去(2026-07-29)。記録を取らなくなったので全部○になり、
+// 「できていない」だけを突きつける表示になるため。ルーティンは一覧で持つだけにする。
 
 function renderRoutines() {
   const ul = $("#routine-list");
@@ -664,11 +589,8 @@ function renderRoutines() {
   for (const r of state.routines) {
     const li = document.createElement("li");
     const daysTxt = r.days.length === 7 ? "毎日" : r.days.map((d) => WEEKDAYS[d]).join("");
-    const todayLog = state.logs.find((l) => l.routine_id === r.id);
-    const status = todayLog ? (todayLog.result === "done" ? "・今日✅" : "・今日😴休み") : "";
     li.innerHTML = `<span class="name">${esc(r.name)}</span>
-      ${habitStrip(r)}
-      <span class="meta">${daysTxt}${r.minutes ? "・" + r.minutes + "分" : ""}${status}</span>
+      <span class="meta">${daysTxt}${r.minutes ? "・" + r.minutes + "分" : ""}</span>
       <button class="danger del-b">削除</button>`;
     li.querySelector(".del-b").addEventListener("click", async () => {
       if (!confirm(`ルーティン「${r.name}」を削除しますか?`)) return;
@@ -945,53 +867,103 @@ function renderGlory() {
     <p class="g-best muted">週の自己ベスト ${best}件${bestIsNow ? " — 🏆 <b>今週が自己ベストです</b>" : ""}</p>`;
 }
 
+// 目標の再設計(2026-07-29 賢大の指摘)。
+// 「目標値と単位だと全くわからない」→ 主役を数字から【完了の定義(文章)】に入れ替えた。
+// 「どのタスクの目標設定か分かるように」→ tasks.goal_id で紐づけ、両方向から見えるようにした。
+// 数値(目標値/単位/合格ライン%)は任意のおまけに降格。達成の判定は文章なので手動ボタンで押す。
 $("#goal-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const title = $("#goal-title").value.trim();
-  if (!title) return;
-  const threshold = Math.min(100, Math.max(1, Number($("#goal-threshold").value) || 75));
-  const payload = { title, threshold, progress: 0 };
-  if (state.hasGoalTarget) {
-    payload.target_value = Number($("#goal-target").value) || null;
-    payload.unit = $("#goal-unit").value.trim() || null;
-  }
-  await sb.from("goals").insert(payload);
+  const dod = $("#goal-dod").value.trim();
+  if (!title || !dod) return;
+  await sb.from("goals").insert({
+    title,
+    done_definition: dod,
+    due_date: $("#goal-due").value || null,
+    threshold: Math.min(100, Math.max(1, Number($("#goal-threshold").value) || 75)),
+    progress: 0,
+    target_value: Number($("#goal-target").value) || null,
+    unit: $("#goal-unit").value.trim() || null,
+  });
   e.target.reset();
   $("#goal-threshold").value = 75;
   await refresh();
 });
 
-// 目標=ゲージをやめ、「目標値 × 基準% = 合格ライン」を出すだけにした(2026-07-26)。
-// 理由(賢大):「何をもって75%なのかが分からない状態」。分母が無い%は意味を持たない。
-// 進捗は追わない。どこからが合格かが分かれば、責めない設計は成立する。
+// 期限までの残り日数(ローカル日付基準)
+function daysLeft(due) {
+  return Math.round((new Date(due + "T00:00:00") - new Date(todayStr() + "T00:00:00")) / 86400000);
+}
+
 function renderGoals() {
   const box = $("#goal-list");
-  const note = $("#goal-note");
+  $("#goal-note").textContent = "";
   box.innerHTML = "";
-  note.textContent = state.hasGoalTarget
-    ? ""
-    : "⚠ 目標値の保存には、Supabaseで1回だけSQLを実行する必要があります(田中に「目標のSQL」と言えば出します)。";
   if (!state.goals.length) {
-    box.innerHTML = `<p class="muted">目標はまだありません。満点でなくていい。<b>どこからが合格か</b>を先に決めるのが目的です。</p>`;
+    box.innerHTML = `<p class="muted">目標はまだありません。<b>何をもって完了か</b>を先に文章で決めるのが目的です。</p>`;
     return;
   }
-  for (const g of state.goals) {
+  // 未達成が先、達成済みは下へ
+  const goals = [...state.goals].sort((a, b) => (a.achieved_at ? 1 : 0) - (b.achieved_at ? 1 : 0));
+  for (const g of goals) {
+    const done = !!g.achieved_at;
     const u = esc(g.unit || "");
     const pass = g.target_value ? Math.ceil((g.target_value * g.threshold) / 100) : null;
+
+    // このゴールに紐づくタスク(未完・完了)
+    const openT = state.tasks.filter((t) => t.goal_id === g.id);
+    const doneT = state.done.filter((t) => t.goal_id === g.id);
+
+    let dueHtml = "";
+    if (g.due_date) {
+      const n = daysLeft(g.due_date);
+      const label = n < 0 ? `${-n}日 超過` : n === 0 ? "今日まで" : `あと${n}日`;
+      dueHtml = `<div class="goal-due${n < 0 && !done ? " over" : ""}">🗓 ${g.due_date.slice(5).replace("-", "/")} まで・${label}</div>`;
+    }
+
     const div = document.createElement("div");
-    div.className = "goal";
+    div.className = "goal" + (done ? " achieved" : "");
     div.innerHTML = `
-      <div class="goal-top"><span class="goal-title">${esc(g.title)}</span></div>
-      <div class="goal-pass">${pass
-        ? `目標 <b>${g.target_value}${u}</b> ／ <span class="pass-num">合格ライン ${pass}${u}</span>（${g.threshold}%）`
-        : `<span class="muted">目標値が未設定です（作り直すと合格ラインが出ます）</span>`}</div>
+      <div class="goal-top">
+        <span class="goal-title">${done ? "🏆 " : "🎯 "}${esc(g.title)}</span>
+        <button class="ach-b ${done ? "ghost" : "primary"}">${done ? "戻す" : "完了にする"}</button>
+      </div>
+      <div class="goal-dod"><span class="dod-label">完了の定義</span>${esc(g.done_definition || "(未記入)")}</div>
+      ${dueHtml}
+      ${pass ? `<div class="goal-pass">目標 <b>${g.target_value}${u}</b> ／ <span class="pass-num">合格ライン ${pass}${u}</span>（${g.threshold}%）</div>` : ""}
+      <div class="goal-tasks">
+        <span class="gt-head">ひもづくタスク　✅${doneT.length} / 残り${openT.length}</span>
+        ${openT.length
+          ? `<ul class="gt-list">${openT.map((t) => `<li>・${esc(t.name)}</li>`).join("")}</ul>`
+          : `<span class="muted gt-none">${doneT.length ? "残りなし" : "まだありません。タスク側の「🎯 目標」から紐づけられます。"}</span>`}
+      </div>
+      ${done ? `<div class="goal-when muted">達成 ${dstr(new Date(g.achieved_at))}</div>` : ""}
       <div class="row goal-ctl"><button class="del-b danger">削除</button></div>`;
+
+    div.querySelector(".ach-b").addEventListener("click", async () => {
+      if (!done && !confirm(`「${g.done_definition || g.title}」\n\nこれを満たしましたか?`)) return;
+      await sb.from("goals").update({ achieved_at: done ? null : new Date().toISOString() }).eq("id", g.id);
+      await refresh();
+    });
     div.querySelector(".del-b").addEventListener("click", async () => {
-      if (!confirm(`目標「${g.title}」を削除しますか?`)) return;
+      if (!confirm(`目標「${g.title}」を削除しますか?\n(紐づいたタスクは残ります)`)) return;
       await sb.from("goals").delete().eq("id", g.id);
       await refresh();
     });
     box.appendChild(div);
+  }
+}
+
+// タスク側の「どの目標のため?」セレクトを、未達成の目標で埋める
+function renderGoalSelects() {
+  const opts = `<option value="">🎯 目標に紐づけない</option>` +
+    state.goals.filter((g) => !g.achieved_at)
+      .map((g) => `<option value="${g.id}">🎯 ${esc(g.title)}</option>`).join("");
+  for (const sel of ["#task-goal", "#te-goal"]) {
+    const el = $(sel);
+    const keep = el.value;
+    el.innerHTML = opts;
+    el.value = keep; // 開いている編集画面の選択を壊さない
   }
 }
 
@@ -1007,6 +979,7 @@ function openTaskEditor(opts = {}) {
   $("#te-deadline").value = t.deadline || "";
   $("#te-minutes").value = t.minutes || "";
   $("#te-focus").checked = !!t.focus_needed;
+  $("#te-goal").value = t.goal_id || opts.goal_id || "";
   const dg = t.delegate || "";
   $("#te-delegate-on").checked = !!dg;
   $("#te-delegate").classList.toggle("hidden", !dg);
@@ -1035,6 +1008,7 @@ $("#te-save").addEventListener("click", async () => {
     minutes: $("#te-minutes").value ? Number($("#te-minutes").value) : null,
     focus_needed: $("#te-focus").checked,
     delegate: $("#te-delegate-on").checked ? ($("#te-delegate").value.trim() || null) : null,
+    goal_id: $("#te-goal").value || null,
   };
   if (state.hasDelegatedAt) {
     const before = teCtx.task?.delegate || null;
@@ -1106,6 +1080,7 @@ async function refresh() {
   safeRender("タスク", renderTasks);
   safeRender("ルーティン", renderRoutines);
   safeRender("委任先", renderDelegateNames);
+  safeRender("目標の選択肢", renderGoalSelects);
   safeRender("実績", renderResults);
   await Promise.all([loadBucket(), loadInbox()]);
 }
