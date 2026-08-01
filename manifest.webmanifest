@@ -1,7 +1,7 @@
 {
-  "name": "今日やる",
-  "short_name": "今日やる",
-  "description": "何からやるか考えさせないタスク管理",
+  "name": "死ぬまでに",
+  "short_name": "死ぬまでに",
+  "description": "残り時間と、死ぬまでにやることリスト",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#f4f4f7",

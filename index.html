@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>今日やる</title>
+<title>死ぬまでに</title>
 <meta name="theme-color" content="#4f46e5">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -12,14 +12,14 @@
 <!-- ?v= は必ずアプリ版数と揃える。これが無いと index.html だけ新しく app.js が古い、という
      混在が起きる(2026-07-29に実際に発生:HTMLはv6.7・JSはv6.6で画面が壊れた)。
      版数を変えるとURLが変わる=端末は必ず取り直す。 -->
-<link rel="stylesheet" href="style.css?v=6.9">
+<link rel="stylesheet" href="style.css?v=7.0">
 </head>
 <body>
 
 <!-- ログイン画面 -->
 <div id="auth-view" class="view hidden">
   <div class="auth-box">
-    <h1>今日やる</h1>
+    <h1>死ぬまでに</h1>
     <p class="muted">メールアドレスにログイン用リンクを送ります。<br>パスワードは不要です。</p>
     <input id="auth-email" type="email" placeholder="メールアドレス" autocomplete="email">
     <button id="auth-send" class="primary">ログインメールを送る</button>
@@ -42,250 +42,50 @@
   </div>
 </div>
 
-<!-- アプリ本体 -->
+<!-- アプリ本体:1画面だけ(2026-08-01 v7.0)
+     タスク/ルーティン/実績/アイデアのUIは全廃した。賢大の結論=「必要なのはタイムバケットだけ」。
+     根拠:TOP3を実際に入れた日は2日(最終7/17)・目標は1件・受信箱は7/3から放置。
+     DBのテーブルとデータは1行も消していない。旧UIのコードはgit履歴に全部残っている。 -->
 <div id="app-view" class="view hidden">
-
   <main id="main">
-    <!-- 今日タブ -->
-    <section id="tab-today" class="tab">
-      <h2 id="today-date"></h2>
 
-      <!-- 主役:今日やる3つを決める。ここだけで開く→決める→閉じるが完結する -->
-      <p class="section-label">今日やる3つ<span class="simple-only">(決めたら閉じてOK)</span></p>
-      <div id="top3"></div>
-
-      <!-- 3秒クイック追加。空き枠があれば、そのまま上の「今日やる3つ」に入る -->
-      <form id="quick-add">
-        <input id="qa-name" placeholder="＋ 今日やることを追加(名前だけでOK)" autocomplete="off" enterkeyhint="done">
-      </form>
-      <p id="qa-msg" class="muted"></p>
-
-      <!-- ポモドーロは撤去。知識だけ残す(タイマーは端末標準を使う) -->
-      <p class="pomo-note">⏱ 25分作業＋5分休憩 ×4セットが、1つの作業のMAX。</p>
-
-      <!-- 「今すぐやる1個」「🌙余白」は撤去(2026-07-28 賢大の判断)。
-           前者はTOP3と役割が重複、後者は使われていなかった。 -->
-
-      <!-- ルーティンは「今日やる3つ」とは別枠(2026-07-29)。混ぜるとTOP3が習慣の消化枠に化ける。
-           1行サマリーなので場所は取らない。タップで開く。 -->
-      <div id="today-routines"></div>
-
-      <!-- 残りのタスクは畳む(見たい時だけ開く) -->
-      <details id="today-more">
-        <summary>ほかのタスクを見る</summary>
-        <ul id="today-rest" class="list"></ul>
-      </details>
-
-      <p id="today-empty" class="muted hidden">全部終わってます。おつかれさま 🎉</p>
-    </section>
-
-    <!-- タスクタブ -->
-    <section id="tab-tasks" class="tab hidden">
-      <h2>タスク</h2>
-      <form id="task-form">
-        <input id="task-name" placeholder="タスクを追加(例:発送準備)" required>
-        <div class="row">
-          <select id="task-priority">
-            <option value="1">緊急でやらないといけない</option>
-            <option value="2" selected>急がないけど、やると前に進む</option>
-            <option value="3">自分がやらなくても影響がない</option>
-          </select>
-          <input id="task-deadline" type="date" title="締切">
-        </div>
-        <div class="row mins-chips">
-          <span class="muted">所要:</span>
-          <button type="button" data-min="5">5分</button>
-          <button type="button" data-min="10">10分</button>
-          <button type="button" data-min="20">20分</button>
-          <button type="button" data-min="30">30分</button>
-          <button type="button" data-min="60">60分</button>
-          <input id="task-minutes" type="number" min="1" placeholder="分" style="width:60px">
-        </div>
-        <div class="row">
-          <label class="chk"><input type="checkbox" id="task-focus"> 🎯集中力が必要</label>
-          <label class="chk"><input type="checkbox" id="task-hate"> 😤嫌い(やりたくない)</label>
-          <label class="chk"><input type="checkbox" id="task-delegate-on"> 🤝委任する</label>
-          <input id="task-delegate" class="hidden" list="delegate-names" placeholder="誰に頼む?" style="width:120px">
-        </div>
-        <div class="row">
-          <select id="task-goal" class="goal-sel"><option value="">🎯 目標に紐づけない</option></select>
-          <button class="primary" type="submit">追加</button>
-        </div>
-      </form>
-
-      <div id="time-reco"></div>
-      <div id="focus30"></div>
-      <div class="row filter-chips">
-        <button type="button" id="filter-20" class="chip">⏱ 20分でできる</button>
-        <div id="cat-filter" class="chips"></div>
+    <!-- 残り時間。ここが主役なので一番上に置く -->
+    <div id="life-setup" class="hidden">
+      <p class="muted">生年月日を入れると「残り時間」が出ます。</p>
+      <div class="row">
+        <input id="birthdate" type="date">
+        <button id="birthdate-save" class="primary">設定</button>
       </div>
-      <ul id="task-list" class="list"></ul>
+    </div>
+    <div id="life-view" class="hidden">
+      <p id="life-stats"></p>
+      <div id="life-meter"><div id="life-fill"></div></div>
+      <p id="life-meter-label" class="muted"></p>
+    </div>
 
-      <h2>ルーティン(毎日やること)</h2>
-      <form id="routine-form">
-        <input id="routine-name" placeholder="ルーティンを追加(例:ガチャ公開前チェック)" required>
-        <div class="row">
-          <div id="routine-days" class="days"></div>
-          <input id="routine-minutes" type="number" min="1" placeholder="分">
-          <button class="primary" type="submit">追加</button>
-        </div>
-      </form>
-      <ul id="routine-list" class="list"></ul>
-    </section>
-
-    <!-- 実績タブ -->
-    <section id="tab-results" class="tab hidden">
-      <h2>実績</h2>
-
-      <!-- 打席数(今週) -->
-      <div id="atbat"></div>
-
-      <!-- 集中時間帯(実測)は撤去(2026-07-26)。ポモ撤去で記録が止まり、永久に判定数に届かないため -->
-
-      <!-- 14日の動き -->
-      <p class="section-label">この2週間の動き</p>
-      <div id="activity14"></div>
-
-      <!-- 栄光リスト -->
-      <p class="section-label">栄光リスト(積み上げ)</p>
-      <div id="glory"></div>
-
-      <!-- 目標:主役は「完了の定義」の文章。数値は任意のおまけ(2026-07-29 再設計) -->
-      <p class="section-label">目標</p>
-      <form id="goal-form">
-        <input id="goal-title" placeholder="目標(例:新アカのフォロワー1,000人)" required>
-        <textarea id="goal-dod" rows="2" required
-          placeholder="何をもって完了? (例:TikTokのフォロワーが1,000人を超えて、Shop申請が通った時)"></textarea>
-        <div class="row">
-          <label class="date-label">期限(任意)<input id="goal-due" type="date"></label>
-          <button class="primary" type="submit">追加</button>
-        </div>
-        <details class="goal-adv">
-          <summary>数で数えられる目標なら(任意)</summary>
-          <div class="row">
-            <input id="goal-target" type="number" min="1" placeholder="目標値" style="width:88px">
-            <input id="goal-unit" placeholder="単位(本)" style="width:76px">
-            <span class="muted">合格ライン</span>
-            <input id="goal-threshold" type="number" min="1" max="100" value="75" style="width:56px">%
-          </div>
-          <p class="muted">満点でなくていい。<b>どこからが合格か</b>を先に決めるための欄です。</p>
-        </details>
-      </form>
-      <p id="goal-note" class="muted"></p>
-      <div id="goal-list"></div>
-
-      <!-- 実績(完了したタスク) -->
-      <p class="section-label">完了したタスク</p>
-      <p id="done-summary" class="muted"></p>
-      <div id="done-list"></div>
-    </section>
-
-    <!-- アイデアタブ(ブレインダンプ + Obsidian受信箱) -->
-    <section id="tab-inbox" class="tab hidden">
-      <h2>アイデア</h2>
-      <!-- ブレインダンプは撤去(2026-07-26 賢大「紙に書くから要らない」) -->
-
-      <p class="section-label">Obsidian受信箱</p>
-      <p class="muted">Obsidianに書いたアイデアが1つずつ届きます。タスクにするか、いらなければアーカイブ。処理したものは二度と出ません。</p>
-      <div id="inbox-list"></div>
-    </section>
-
-    <!-- 運用タブは撤去(2026-07-26 賢大の判断「必要ない」)。DBのデータは消していない -->
-
-    <!-- バケットタブ -->
-    <section id="tab-bucket" class="tab hidden">
-      <h2>タイムバケット</h2>
-      <div id="life-setup">
-        <p class="muted">生年月日を入れると「人生の残り時間」が見えるようになります。</p>
-        <div class="row">
-          <input id="birthdate" type="date">
-          <button id="birthdate-save" class="primary">設定</button>
-        </div>
+    <!-- 追加 -->
+    <form id="bucket-form">
+      <input id="bucket-name" placeholder="＋ 死ぬまでにやりたいこと" autocomplete="off" enterkeyhint="done" required>
+      <div class="row">
+        <select id="bucket-horizon">
+          <option value="1y">1年以内</option>
+          <option value="3y">3年以内</option>
+          <option value="5y">5年以内</option>
+          <option value="10y">10年以内</option>
+          <option value="life" selected>死ぬまでに</option>
+        </select>
+        <button class="primary" type="submit">追加</button>
       </div>
-      <div id="life-view" class="hidden">
-        <p id="life-stats"></p>
-        <div id="life-meter"><div id="life-fill"></div></div>
-        <p id="life-meter-label" class="muted"></p>
-      </div>
-      <p class="section-label">やりたいことを追加</p>
-      <form id="bucket-form">
-        <input id="bucket-name" placeholder="例:家族でハワイに行く" required>
-        <div class="row">
-          <select id="bucket-horizon">
-            <option value="1y">1年以内</option>
-            <option value="3y">3年以内</option>
-            <option value="5y">5年以内</option>
-            <option value="10y">10年以内</option>
-            <option value="life">死ぬまでに</option>
-          </select>
-          <button class="primary" type="submit">追加</button>
-        </div>
-      </form>
-      <div id="bucket-chips" class="chips"></div>
-      <ul id="bucket-list" class="list"></ul>
+    </form>
 
-      <!-- 隠した機能をいつでも戻すスイッチ(データは消していない) -->
-      <div id="simple-switch">
-        <button id="simple-toggle" type="button" class="ghost"></button>
-        <p id="simple-note" class="muted"></p>
-      </div>
-      <p class="muted">app v6.9</p>
-    </section>
+    <div id="bucket-chips" class="chips"></div>
+    <ul id="bucket-list" class="list"></ul>
+
+    <p class="ver muted">死ぬまでに v7.0</p>
   </main>
-
-  <nav id="tabbar">
-    <button data-tab="today" class="active">📌<span>今日</span></button>
-    <button data-tab="tasks" data-simple-hide>✅<span>タスク</span></button>
-    <button data-tab="inbox">💡<span>アイデア</span></button>
-    <button data-tab="results" data-simple-hide>🏆<span>実績</span></button>
-    <button data-tab="bucket">🪣<span>バケット</span></button>
-  </nav>
 </div>
-
-<!-- タスク編集モーダル(新規タスク化・後から編集の共通画面) -->
-<div id="task-editor" class="modal hidden">
-  <div class="modal-card">
-    <h3 id="te-title">タスクを編集</h3>
-    <input id="te-name" placeholder="タスク名" required>
-    <div class="row">
-      <select id="te-priority">
-        <option value="1">緊急でやらないといけない</option>
-        <option value="2" selected>急がないけど、やると前に進む</option>
-        <option value="3">自分がやらなくても影響がない</option>
-      </select>
-      <label class="chk"><input type="checkbox" id="te-hate"> 😤嫌い(やりたくない)</label>
-    </div>
-    <div class="row">
-      <label class="date-label">いつやる<input id="te-deadline" type="date"></label>
-    </div>
-    <div class="row mins-chips te-mins">
-      <span class="muted">所要:</span>
-      <button type="button" data-min="5">5分</button>
-      <button type="button" data-min="10">10分</button>
-      <button type="button" data-min="20">20分</button>
-      <button type="button" data-min="30">30分</button>
-      <button type="button" data-min="60">60分</button>
-      <input id="te-minutes" type="number" min="1" placeholder="分" style="width:60px">
-    </div>
-    <div class="row">
-      <label class="chk"><input type="checkbox" id="te-focus"> 🎯集中力が必要</label>
-      <label class="chk"><input type="checkbox" id="te-delegate-on"> 🤝委任する</label>
-      <input id="te-delegate" class="hidden" list="delegate-names" placeholder="誰に頼む?" style="width:120px">
-    </div>
-    <div class="row">
-      <select id="te-goal" class="goal-sel"><option value="">🎯 目標に紐づけない</option></select>
-    </div>
-    <div class="row te-actions">
-      <button id="te-save" class="primary" type="button">保存</button>
-      <button id="te-cancel" class="ghost" type="button">キャンセル</button>
-      <button id="te-delete" class="danger hidden" type="button">削除</button>
-    </div>
-  </div>
-</div>
-
-<datalist id="delegate-names"></datalist>
 
 <script src="config.js"></script>
-<script type="module" src="app.js?v=6.9"></script>
+<script type="module" src="app.js?v=7.0"></script>
 </body>
 </html>
