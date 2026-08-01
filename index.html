@@ -12,7 +12,7 @@
 <!-- ?v= は必ずアプリ版数と揃える。これが無いと index.html だけ新しく app.js が古い、という
      混在が起きる(2026-07-29に実際に発生:HTMLはv6.7・JSはv6.6で画面が壊れた)。
      版数を変えるとURLが変わる=端末は必ず取り直す。 -->
-<link rel="stylesheet" href="style.css?v=7.0">
+<link rel="stylesheet" href="style.css?v=7.1">
 </head>
 <body>
 
@@ -42,7 +42,7 @@
   </div>
 </div>
 
-<!-- アプリ本体:1画面だけ(2026-08-01 v7.0)
+<!-- アプリ本体:1画面だけ(2026-08-01 v7.1)
      タスク/ルーティン/実績/アイデアのUIは全廃した。賢大の結論=「必要なのはタイムバケットだけ」。
      根拠:TOP3を実際に入れた日は2日(最終7/17)・目標は1件・受信箱は7/3から放置。
      DBのテーブルとデータは1行も消していない。旧UIのコードはgit履歴に全部残っている。 -->
@@ -81,11 +81,11 @@
     <div id="bucket-chips" class="chips"></div>
     <ul id="bucket-list" class="list"></ul>
 
-    <p class="ver muted">死ぬまでに v7.0</p>
+    <p class="ver muted">死ぬまでに v7.1</p>
   </main>
 </div>
 
 <script src="config.js"></script>
-<script type="module" src="app.js?v=7.0"></script>
+<script type="module" src="app.js?v=7.1"></script>
 </body>
 </html>
