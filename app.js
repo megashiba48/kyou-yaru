@@ -112,6 +112,29 @@ function drawLife() {
   $("#life-meter-label").textContent = `${lifeYears}歳までのゲージ:${pct}%経過・残り${Math.round((100 - pct) * 10) / 10}%`;
 }
 
+// ---------- 画面の切り替え(v7.3) ----------
+// 2画面:「今日やる」と「死ぬまでに」。開いた時は必ず今日やるから始める(記憶しない)。
+// 残り時間ゲージは両方の頭に出すが、今日やる側は数字1行だけに畳む(縦に伸ばさないため)。
+let tab = "today";
+
+function setTab(next) {
+  tab = next;
+  for (const b of document.querySelectorAll("#tabs .tab")) {
+    b.classList.toggle("on", b.dataset.tab === next);
+  }
+  $("#panel-today").classList.toggle("hidden", next !== "today");
+  $("#panel-bucket").classList.toggle("hidden", next !== "bucket");
+  // ゲージのバーと注釈は「死ぬまでに」側だけ
+  $("#life-meter").classList.toggle("hidden", next !== "bucket");
+  $("#life-meter-label").classList.toggle("hidden", next !== "bucket");
+  window.scrollTo(0, 0);
+}
+
+for (const b of document.querySelectorAll("#tabs .tab")) {
+  b.addEventListener("click", () => setTab(b.dataset.tab));
+}
+setTab("today");
+
 // ---------- 今日やる3つ ----------
 // 設計(2026-08-07・賢大の指示):
 //   ・1日に置けるのは最大3行。ストック(あとで用の置き場)は作らない。ジャンル分けもしない。

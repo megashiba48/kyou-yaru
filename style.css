@@ -1,4 +1,4 @@
-/* 死ぬまでに — 1画面ぶんだけ。v7.2(2026-08-07に「今日やる3つ」を追加)
+/* 死ぬまでに — v7.3(2026-08-07)。「今日やる」と「死ぬまでに」の2画面
    旧「今日やる」の全機能ぶんのCSSは撤去した。git履歴に残っている。 */
 :root {
   --indigo: #4f46e5;
@@ -54,10 +54,16 @@ button.danger { background: #fee2e2; color: var(--danger); }
 #life-fill { height: 100%; background: linear-gradient(90deg, var(--indigo), #7c74f0); border-radius: 999px; }
 #life-meter-label { font-size: .78rem; }
 
+/* 画面の切り替え(v7.3)。上に置く=下の固定バーはホームインジケータと喧嘩するので避けた */
+#tabs { display: flex; gap: 4px; background: #e4e6ee; padding: 4px; border-radius: 12px; margin: 20px 0 16px; }
+#tabs .tab { flex: 1; background: transparent; border-radius: 9px; padding: 10px 4px;
+  font-size: .92rem; font-weight: 700; color: var(--muted); }
+#tabs .tab.on { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.10); }
+#tabs .tab span { font-weight: 400; font-size: .8rem; opacity: .75; margin-left: 4px; }
+
 /* 今日やる3つ(v7.2) */
 .sec-t { font-size: .95rem; margin: 26px 0 8px; letter-spacing: .02em; }
 .sec-t .muted { font-weight: 400; }
-#today-box { margin-top: 22px; }
 #today-name { width: 100%; resize: vertical; min-height: 76px; line-height: 1.5; }
 #today-form .row { justify-content: flex-end; }
 

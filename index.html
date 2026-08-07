@@ -12,7 +12,7 @@
 <!-- ?v= は必ずアプリ版数と揃える。これが無いと index.html だけ新しく app.js が古い、という
      混在が起きる(2026-07-29に実際に発生:HTMLはv6.7・JSはv6.6で画面が壊れた)。
      版数を変えるとURLが変わる=端末は必ず取り直す。 -->
-<link rel="stylesheet" href="style.css?v=7.2">
+<link rel="stylesheet" href="style.css?v=7.3">
 </head>
 <body>
 
@@ -42,10 +42,11 @@
   </div>
 </div>
 
-<!-- アプリ本体:1画面だけ(2026-08-01 v7.1)
-     タスク/ルーティン/実績/アイデアのUIは全廃した。賢大の結論=「必要なのはタイムバケットだけ」。
-     根拠:TOP3を実際に入れた日は2日(最終7/17)・目標は1件・受信箱は7/3から放置。
-     DBのテーブルとデータは1行も消していない。旧UIのコードはgit履歴に全部残っている。 -->
+<!-- アプリ本体(2026-08-07 v7.3)
+     画面は2つ:「今日やる」と「死ぬまでに」。v7.2で1画面に両方を積んだら縦に伸びすぎたので分けた。
+     残り時間ゲージは両方の頭に置く(「今日やる」では数字1行だけ・「死ぬまでに」ではバー付き)。
+     理由=このアプリを毎日開く動機はゲージなので、今日やる側から消すと開く理由が減る。
+     タスク/ルーティン/アイデアのUIはv7.0で全廃したまま。旧UIのコードはgit履歴に残っている。 -->
 <div id="app-view" class="view hidden">
   <main id="main">
 
@@ -63,13 +64,18 @@
       <p id="life-meter-label" class="muted"></p>
     </div>
 
+    <!-- 画面の切り替え。開いた時は必ず「今日やる」から始まる(記憶しない=今日に集中させるため) -->
+    <nav id="tabs">
+      <button type="button" class="tab on" data-tab="today">今日やる<span id="today-count"></span></button>
+      <button type="button" class="tab" data-tab="bucket">死ぬまでに</button>
+    </nav>
+
     <!-- 今日やる3つ(2026-08-07 v7.2)
          3行だけ。ストック無し・ジャンル無し・締切なし。未完は翌日へ自動で繰り越し、放置日数を出す。
          前身のTOP3(v6.x)が死んだ原因は「タスクを書く→その中から3つ選ぶ」の2段目。
          実測でも埋まったのは7/13(2件)と7/17(1件)の2日だけで、3つ揃った日はゼロだった。
          今回はプールを持たないので「書く」がそのまま「選ぶ」になる。 -->
-    <section id="today-box">
-      <h2 class="sec-t">今日やる<span id="today-count" class="muted"></span></h2>
+    <section id="panel-today" class="panel">
       <ol id="today-list" class="today"></ol>
       <form id="today-form">
         <textarea id="today-name" rows="3" placeholder="今日やること(具体的に書く)" enterkeyhint="done"></textarea>
@@ -77,15 +83,14 @@
       </form>
       <p id="today-full" class="muted hidden">今日の3つは埋まりました。<b>終わらせるか、やめるか</b>してから次を書く。</p>
       <p id="today-msg" class="muted"></p>
+
+      <details id="log-box">
+        <summary>🏆 やったこと<span id="log-total" class="muted"></span></summary>
+        <div id="log-body"></div>
+      </details>
     </section>
 
-    <details id="log-box">
-      <summary>🏆 やったこと<span id="log-total" class="muted"></span></summary>
-      <div id="log-body"></div>
-    </details>
-
-    <!-- 追加 -->
-    <h2 class="sec-t">死ぬまでに</h2>
+    <section id="panel-bucket" class="panel hidden">
     <form id="bucket-form">
       <input id="bucket-name" placeholder="＋ 死ぬまでにやりたいこと" autocomplete="off" enterkeyhint="done" required>
       <div class="row">
@@ -102,12 +107,13 @@
 
     <div id="bucket-chips" class="chips"></div>
     <ul id="bucket-list" class="list"></ul>
+    </section>
 
-    <p class="ver muted">死ぬまでに v7.2</p>
+    <p class="ver muted">死ぬまでに v7.3</p>
   </main>
 </div>
 
 <script src="config.js"></script>
-<script type="module" src="app.js?v=7.2"></script>
+<script type="module" src="app.js?v=7.3"></script>
 </body>
 </html>
