@@ -12,7 +12,7 @@
 <!-- ?v= は必ずアプリ版数と揃える。これが無いと index.html だけ新しく app.js が古い、という
      混在が起きる(2026-07-29に実際に発生:HTMLはv6.7・JSはv6.6で画面が壊れた)。
      版数を変えるとURLが変わる=端末は必ず取り直す。 -->
-<link rel="stylesheet" href="style.css?v=7.1">
+<link rel="stylesheet" href="style.css?v=7.2">
 </head>
 <body>
 
@@ -63,7 +63,29 @@
       <p id="life-meter-label" class="muted"></p>
     </div>
 
+    <!-- 今日やる3つ(2026-08-07 v7.2)
+         3行だけ。ストック無し・ジャンル無し・締切なし。未完は翌日へ自動で繰り越し、放置日数を出す。
+         前身のTOP3(v6.x)が死んだ原因は「タスクを書く→その中から3つ選ぶ」の2段目。
+         実測でも埋まったのは7/13(2件)と7/17(1件)の2日だけで、3つ揃った日はゼロだった。
+         今回はプールを持たないので「書く」がそのまま「選ぶ」になる。 -->
+    <section id="today-box">
+      <h2 class="sec-t">今日やる<span id="today-count" class="muted"></span></h2>
+      <ol id="today-list" class="today"></ol>
+      <form id="today-form">
+        <textarea id="today-name" rows="3" placeholder="今日やること(具体的に書く)" enterkeyhint="done"></textarea>
+        <div class="row"><button class="primary" type="submit">追加</button></div>
+      </form>
+      <p id="today-full" class="muted hidden">今日の3つは埋まりました。<b>終わらせるか、やめるか</b>してから次を書く。</p>
+      <p id="today-msg" class="muted"></p>
+    </section>
+
+    <details id="log-box">
+      <summary>🏆 やったこと<span id="log-total" class="muted"></span></summary>
+      <div id="log-body"></div>
+    </details>
+
     <!-- 追加 -->
+    <h2 class="sec-t">死ぬまでに</h2>
     <form id="bucket-form">
       <input id="bucket-name" placeholder="＋ 死ぬまでにやりたいこと" autocomplete="off" enterkeyhint="done" required>
       <div class="row">
@@ -81,11 +103,11 @@
     <div id="bucket-chips" class="chips"></div>
     <ul id="bucket-list" class="list"></ul>
 
-    <p class="ver muted">死ぬまでに v7.1</p>
+    <p class="ver muted">死ぬまでに v7.2</p>
   </main>
 </div>
 
 <script src="config.js"></script>
-<script type="module" src="app.js?v=7.1"></script>
+<script type="module" src="app.js?v=7.2"></script>
 </body>
 </html>
